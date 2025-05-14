@@ -1,5 +1,8 @@
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <locale>
+#include <string>
 #include "../thirdparty/imgui-docking/imgui/imgui.h"
 #include "FileDialogs.hpp"
 
@@ -36,6 +39,15 @@ std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool fold
             found.push_back(file.path());
         }
     }
+    auto& f = std::use_facet<std::ctype<wchar_t>>(std::locale());
+    std::sort(found.begin(), found.end(), [&f](std::filesystem::path& a, std::filesystem::path& b) -> bool {
+        std::wstring as = a.wstring();
+        std::wstring bs = b.wstring();
+        return std::lexicographical_compare(
+            as.begin(), as.end(), bs.begin(), bs.end(), [&f](wchar_t ai, wchar_t bi) {
+                return f.tolower(ai) < f.tolower(bi);
+        });
+    });
     return found;
 }
 
