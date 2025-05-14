@@ -16,7 +16,7 @@ class ConfiguredSound {
     float time=0.0f, length=0.0f, pitch=1.0f;
     std::filesystem::path path;
     std::string name;
-    bool started=false;
+    bool started=false, repeating=false;
     ConfiguredSound() {}
     ConfiguredSound(Music s, std::filesystem::path p)
         : music(s), path(p) {
@@ -78,6 +78,7 @@ int main(int argc, char** argv) {
     ConfiguredSound* current_loaded_music = nullptr;
     float global_volume = 1.0f;
     std::filesystem::path current_path = std::filesystem::current_path();
+
     while (!WindowShouldClose()) {
         static float dt = 0;
         BeginDrawing();
@@ -160,6 +161,10 @@ int main(int argc, char** argv) {
             ImGui::Text("%s", current_loaded_music->name.c_str());
             current_loaded_music->time = GetMusicTimePlayed(current_loaded_music->music);
             float music_length = GetMusicTimeLength(current_loaded_music->music);
+            if (!current_loaded_music->repeating && current_loaded_music->time+dt*2.0f >= music_length) {
+                StopMusicStream(current_loaded_music->music);
+                current_loaded_music->started = false;
+            }
             if (ImGui::SliderFloat(std::to_string(music_length).c_str(), &current_loaded_music->time, 0.0f, music_length)) {
                 SeekMusicStream(current_loaded_music->music, current_loaded_music->time);
             }
@@ -185,13 +190,16 @@ int main(int argc, char** argv) {
             if (ImGui::Button("Restart")) {
                 PlayMusicStream(current_loaded_music->music);
             }
+            if (ImGui::Checkbox("Repeat", &current_loaded_music->repeating)) {
+                ;
+            }
             if (ImGui::SliderFloat("Volume", &current_loaded_music->volume, 0.0f, 1.0f)) {
                 SetMusicVolume(current_loaded_music->music, current_loaded_music->volume);
             }
             if (ImGui::SliderFloat("Pan", &current_loaded_music->pan, 0.0f, 1.0f)) {
                 SetMusicPan(current_loaded_music->music, 1.0f - current_loaded_music->pan);
             }
-            if (ImGui::SliderFloat("Pitch", &current_loaded_music->pitch, 0.0f, 1.0f)) {
+            if (ImGui::SliderFloat("Pitch", &current_loaded_music->pitch, 0.0f, 2.0f)) {
                 SetMusicPitch(current_loaded_music->music, current_loaded_music->pitch);
             }
             ImGui::End();
