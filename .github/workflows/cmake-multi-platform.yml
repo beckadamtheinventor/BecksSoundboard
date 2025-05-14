@@ -59,7 +59,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BecksSoundboard_Windows
-          path: build/BecksSoundboard
+          path: build/$env:BUILD_TYPE/BecksSoundboard.exe
 
 
   build_linux:
