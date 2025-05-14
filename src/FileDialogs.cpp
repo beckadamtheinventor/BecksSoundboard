@@ -1,11 +1,12 @@
 #include <cstring>
-#include <fileapi.h>
 #include <filesystem>
 #include <imgui.h>
 #include "FileDialogs.hpp"
 
 #ifdef WIN32
-#include <windows.h>
+#include <windef.h>
+#include <winnt.h>
+#include <winbase.h>
 #endif
 
 std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool folders) {
