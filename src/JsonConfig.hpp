@@ -1,7 +1,7 @@
 #ifndef __JSON_CONFIG_HPP__
 #define __JSON_CONFIG_HPP__
 
-#include <nlohmann/json.hpp>
+#include "../include/nlohmann/json.hpp"
 #include <raylib.h>
 #include <fstream>
 

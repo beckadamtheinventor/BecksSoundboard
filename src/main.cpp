@@ -1,14 +1,15 @@
 
 #include "FileDialogs.hpp"
 #include "JsonConfig.hpp"
-#include "nlohmann/json.hpp"
+#include "../include/nlohmann/json.hpp"
+#include "../thirdparty/raylib-5.0/src/external/miniaudio.h"
+#include "../thirdparty/raylib-5.0/src/raylib.h"
+#include "../thirdparty/rlImGui/rlImGui.h"
+#include "../thirdparty/imgui-docking/imgui/imgui.h"
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
-#include <imgui.h>
 #include <map>
-#include <rlImGui.h>
-#include <raylib.h>
 #include <string>
 #include <utility>
 
