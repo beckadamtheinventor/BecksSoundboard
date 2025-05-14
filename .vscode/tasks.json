@@ -1,0 +1,16 @@
+{
+    "version":"2.0.0",
+    "tasks": [
+        {
+            "label": "Build (debug)",
+            "type": "process",
+            "problemMatcher": [],
+            "windows": {
+                "command": "build.bat"
+            },
+            "linux": {
+                "command": "build.sh"
+            }
+        }
+    ]
+}
