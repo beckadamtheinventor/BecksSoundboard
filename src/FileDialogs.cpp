@@ -4,6 +4,7 @@
 #include "FileDialogs.hpp"
 
 #ifdef WIN32
+#define _AMD64_ 1
 #include <windef.h>
 #include <winnt.h>
 #include <winbase.h>
