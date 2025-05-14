@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "${workspaceFolder}/build/BecksSoundboard",
+            "program": "${workspaceFolder}/build/Debug/BecksSoundboard",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build (debug)"

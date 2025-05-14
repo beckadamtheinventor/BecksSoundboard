@@ -1,6 +1,6 @@
 #include <cstring>
 #include <filesystem>
-#include <imgui.h>
+#include "../thirdparty/imgui-docking/imgui/imgui.h"
 #include "FileDialogs.hpp"
 
 #ifdef WIN32
@@ -9,6 +9,21 @@
 #include <winnt.h>
 #include <winbase.h>
 #endif
+
+std::vector<std::filesystem::path> listed_folders;
+std::vector<std::filesystem::path> listed_files;
+bool needs_dirlist = true;
+
+
+// this is a probably a dumb way of doing it, but meh
+std::string NarrowString16Ti8(std::wstring w) {
+    std::string s;
+    for (wchar_t c : w) {
+        if (c < 256)
+            s.push_back(c);
+    }
+    return s;
+}
 
 std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool folders) {
     std::vector<std::filesystem::path> found;
@@ -25,16 +40,13 @@ std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool fold
 }
 
 bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesystem::path& selected, bool* is_open) {
-    static std::vector<std::filesystem::path> folders;
-    static std::vector<std::filesystem::path> files;
-    static bool needs_dirlist = true;
     bool clicked = false;
     if (needs_dirlist) {
         needs_dirlist = false;
-        folders.clear();
-        files.clear();
-        folders = DirList(path, true);
-        files = DirList(path, false);
+        listed_folders.clear();
+        listed_files.clear();
+        listed_folders = DirList(path, true);
+        listed_files = DirList(path, false);
     }
 
     ImGui::Begin(title.c_str(), is_open);
@@ -62,8 +74,9 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
 
     ImGui::Text("Folders");
 
-    for (auto folder : folders) {
-        if (ImGui::Button(folder.filename().string().c_str())) {
+    for (auto folder : listed_folders) {
+        std::string str = NarrowString16Ti8(folder.filename().wstring());
+        if (ImGui::Button(str.c_str())) {
             path = folder;
             needs_dirlist = true;
         }
@@ -71,8 +84,9 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
 
     ImGui::Text("Files");
 
-    for (auto file : files) {
-        if (ImGui::Button(file.filename().string().c_str())) {
+    for (auto file : listed_files) {
+        std::string str = NarrowString16Ti8(file.filename().wstring());
+        if (ImGui::Button(str.c_str())) {
             selected = file;
             needs_dirlist = true;
             clicked = true;
