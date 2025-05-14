@@ -1,5 +1,6 @@
 
 #include "FileDialogs.hpp"
+#include "JsonConfig.hpp"
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
@@ -76,8 +77,10 @@ int main(int argc, char** argv) {
 
     // bool currently_loading_sound = false;
     ConfiguredSound* current_loaded_music = nullptr;
+    int current_loaded_music_index = -1;
     float global_volume = 1.0f;
     std::filesystem::path current_path = std::filesystem::current_path();
+    bool play_in_sequence = false;
 
     while (!WindowShouldClose()) {
         static float dt = 0;
@@ -91,6 +94,10 @@ int main(int argc, char** argv) {
         if (ImGui::SliderFloat("Volume", &global_volume, 0.0f, 1.0f)) {
             SetMasterVolume(global_volume);
         }
+        if (ImGui::Checkbox("Play in Sequence", &play_in_sequence)) {
+            ;
+        }
+        ImGui::Text("Available Playback Devices");
         for (int i=0; i<available_playback_devices.size(); i++) {
             auto dev = &available_playback_devices[i];
             ImGui::PushID(i);
@@ -114,6 +121,14 @@ int main(int argc, char** argv) {
                 if (current_loaded_music == sound) {
                     StopMusicStream(sound->music);
                     current_loaded_music = nullptr;
+                    current_loaded_music_index++;
+                    if (current_loaded_music_index >= loaded_sounds.size()) {
+                        if (loaded_sounds.size() > 0) {
+                            current_loaded_music_index = 0;
+                        } else {
+                            current_loaded_music_index = -1;
+                        }
+                    }
                 }
                 UnloadMusicStream(sound->music);
                 delete sound;
@@ -123,6 +138,7 @@ int main(int argc, char** argv) {
             if (sound != nullptr) {
                 if (ImGui::Button("Select")) {
                     current_loaded_music = sound;
+                    current_loaded_music_index = i;
                 }
                 ImGui::SameLine();
                 ImGui::Text("%s", sound->name.c_str());
@@ -152,7 +168,7 @@ int main(int argc, char** argv) {
             if (now_loaded_music != nullptr) {
                 SetMusicVolume(now_loaded_music->music, now_loaded_music->volume);
                 if (current_loaded_music == nullptr) {
-                    current_loaded_music = loaded_sounds[loaded_sounds.size()-1];
+                    current_loaded_music = loaded_sounds[(current_loaded_music_index = loaded_sounds.size()-1)];
                 }
             }
         }
@@ -164,6 +180,15 @@ int main(int argc, char** argv) {
             if (!current_loaded_music->repeating && current_loaded_music->time+dt*2.0f >= music_length) {
                 StopMusicStream(current_loaded_music->music);
                 current_loaded_music->started = false;
+                if (play_in_sequence) {
+                    current_loaded_music_index++;
+                    if (current_loaded_music_index >= loaded_sounds.size()) {
+                        current_loaded_music_index = 0;
+                    }
+                    current_loaded_music = loaded_sounds[current_loaded_music_index];
+                    PlayMusicStream(current_loaded_music->music);
+                    current_loaded_music->started = true;
+                }
             }
             if (ImGui::SliderFloat(std::to_string(music_length).c_str(), &current_loaded_music->time, 0.0f, music_length)) {
                 SeekMusicStream(current_loaded_music->music, current_loaded_music->time);

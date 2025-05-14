@@ -10,7 +10,7 @@ class JsonConfig {
     nlohmann::json _defaults;
     nlohmann::json _data;
     public:
-    JsonConfig(std::string filename, nlohmann::json& defaults) {
+    JsonConfig(std::string filename, nlohmann::json defaults) {
         _filename = filename;
         _defaults = defaults;
         _data = _defaults;
