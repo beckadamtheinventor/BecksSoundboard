@@ -1,6 +1,7 @@
 
 #include "FileDialogs.hpp"
 #include "JsonConfig.hpp"
+#include "nlohmann/json.hpp"
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
@@ -9,6 +10,7 @@
 #include <rlImGui.h>
 #include <raylib.h>
 #include <string>
+#include <utility>
 
 class ConfiguredSound {
     public:
@@ -27,7 +29,8 @@ class ConfiguredSound {
 };
 
 std::vector<ConfiguredSound*> loaded_sounds;
-std::map<unsigned int, ConfiguredSound*> sound_keybinds;
+std::map<std::string, unsigned int> loaded_sounds_by_path;
+std::map<unsigned int, unsigned int> sound_keybinds;
 std::vector<std::string> console_window_lines;
 std::vector<ma_device_info> available_playback_devices;
 
@@ -82,6 +85,55 @@ int main(int argc, char** argv) {
     std::filesystem::path current_path = std::filesystem::current_path();
     bool play_in_sequence = false;
 
+    JsonConfig config("config.json", {
+        {"global_volume", global_volume},
+        {"play_in_sequence", play_in_sequence},
+        {"current_path", current_path.string()},
+        {"currently_playing", ""},
+        {"loaded_sounds", {}},
+    });
+
+    if (config.load()) {
+        global_volume = config.get<float>("global_volume");
+        play_in_sequence = config.get<bool>("play_in_sequence");
+        current_path = std::filesystem::path(config.get<std::string>("current_path"));
+        std::vector<std::string> loaded_sound_paths = config.get<std::vector<std::string>>("loaded_sounds");
+        nlohmann::json sound_configs = config.contains("sound_configs") ? config["sound_configs"] : nlohmann::json();
+        for (std::string p : loaded_sound_paths) {
+            Music music = LoadMusicStream(p.c_str());
+            if (IsMusicReady(music)) {
+                auto cs = new ConfiguredSound(music, std::filesystem::path(p));
+                if (sound_configs.contains(p)) {
+                    nlohmann::json cfg = sound_configs[p];
+                    if (cfg.contains("vol") && cfg["vol"].is_number()) {
+                        cs->volume = cfg["vol"].get<float>();
+                    }
+                    if (cfg.contains("pit") && cfg["pit"].is_number()) {
+                        cs->pitch = cfg["pit"].get<float>();
+                    }
+                    if (cfg.contains("pan") && cfg["pan"].is_number()) {
+                        cs->pan = cfg["pan"].get<float>();
+                    }
+                    if (cfg.contains("rep") && cfg["rep"].is_number()) {
+                        cs->repeating = cfg["rep"].get<bool>();
+                    }
+                }
+                loaded_sounds.push_back(cs);
+                loaded_sounds_by_path.insert(std::make_pair(cs->path.string(), loaded_sounds.size()-1));
+            }
+        }
+        std::string currently_playing = config.get<std::string>("currently_playing");
+        if (currently_playing.length() > 0) {
+            if (loaded_sounds_by_path.count(currently_playing)) {
+                current_loaded_music_index = loaded_sounds_by_path[currently_playing];
+                current_loaded_music = loaded_sounds[current_loaded_music_index];
+                current_loaded_music->started = false;
+            }
+        }
+    }
+
+    SetMasterVolume(global_volume);
+
     while (!WindowShouldClose()) {
         static float dt = 0;
         BeginDrawing();
@@ -104,6 +156,7 @@ int main(int argc, char** argv) {
             if (ImGui::Button("Select")) {
                 CloseAudioDevice();
                 InitAudioDeviceByID(&dev->id);
+                SetMasterVolume(global_volume);
             }
             ImGui::SameLine();
             ImGui::Text("%s", dev->name);
@@ -159,7 +212,9 @@ int main(int argc, char** argv) {
             Music sound = LoadMusicStream(open_path.string().c_str());
             ConfiguredSound* now_loaded_music = nullptr;
             if (IsMusicReady(sound)) {
-                loaded_sounds.push_back(new ConfiguredSound(sound, open_path));
+                auto cs = new ConfiguredSound(sound, open_path);
+                loaded_sounds.push_back(cs);
+                loaded_sounds_by_path.insert(std::make_pair(cs->path.string(), loaded_sounds.size()-1));
                 now_loaded_music = loaded_sounds[loaded_sounds.size()-1];
                 TraceLog(LOG_INFO, ("Loaded sound file successfuly: \"" + open_path.string() + "\"").c_str());
             } else {
@@ -180,7 +235,7 @@ int main(int argc, char** argv) {
             if (!current_loaded_music->repeating && current_loaded_music->time+dt*2.0f >= music_length) {
                 StopMusicStream(current_loaded_music->music);
                 current_loaded_music->started = false;
-                if (play_in_sequence) {
+                if (play_in_sequence && loaded_sounds.size() > 1) {
                     current_loaded_music_index++;
                     if (current_loaded_music_index >= loaded_sounds.size()) {
                         current_loaded_music_index = 0;
@@ -247,6 +302,35 @@ int main(int argc, char** argv) {
         EndDrawing();
         dt = GetFrameTime();
     }
+
+    config.set("global_volume", global_volume);
+    config.set("play_in_sequence", play_in_sequence);
+    config.set("current_path", current_path.string());
+    if (current_loaded_music) {
+        config.set("currently_playing", current_loaded_music->path.string());
+    } else {
+        config.set("currently_playing", "");
+    }
+    std::vector<std::string> saved_sound_paths;
+    nlohmann::json saved_sound_configs;
+    for (auto pair : loaded_sounds_by_path) {
+        auto cs = loaded_sounds[pair.second];
+        if (cs) {
+            saved_sound_paths.push_back(pair.first);
+            saved_sound_configs[pair.first] = {
+                {"vol", cs->volume},
+                {"pit", cs->pitch},
+                {"pan", cs->pan},
+                {"rep", cs->repeating},
+            };
+        }
+    }
+    config.set("loaded_sounds", saved_sound_paths);
+    config.set("sound_configs", saved_sound_configs);
+    config.save();
+
+    CloseAudioDevice();
+    CloseWindow();
 
     return 0;
 }

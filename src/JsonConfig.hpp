@@ -59,6 +59,12 @@ class JsonConfig {
             TraceLog(LOG_WARNING, "Failed to set key %s: %s", key.c_str(), err.what());
         }
     }
+    bool contains(std::string key) {
+        return _data.contains(key);
+    }
+    nlohmann::json operator[](std::string key) {
+        return _data[key];
+    }
 
 };
 
