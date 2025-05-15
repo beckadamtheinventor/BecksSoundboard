@@ -13,13 +13,15 @@
 #include <winbase.h>
 #endif
 
+std::vector<std::filesystem::path> pinned_folders;
 std::vector<std::filesystem::path> listed_folders;
 std::vector<std::filesystem::path> listed_files;
 bool needs_dirlist = true;
 
 
-// this is a probably a dumb way of doing it, but meh
-std::string NarrowString16Ti8(std::wstring w) {
+// create a copy of the string with only the characters that fit in 8 bits.
+// this is a probably a bad way of doing it, but meh
+std::string NarrowString16To8(std::wstring w) {
     std::string s;
     for (wchar_t c : w) {
         if (c < 256)
@@ -27,6 +29,37 @@ std::string NarrowString16Ti8(std::wstring w) {
     }
     return s;
 }
+
+std::wstring ExpandString8To16(std::string s) {
+    std::wstring w;
+    for (char c : s) {
+        w.push_back(c);
+    }
+    return w;
+}
+
+bool CanNarrowString16To8(std::wstring w) {
+    for (wchar_t c : w) {
+        if (c >= 256) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void AddPinnedFolder(std::filesystem::path p) {
+    for (auto& f : pinned_folders) {
+        if (f == p) {
+            return;
+        }
+    }
+    pinned_folders.push_back(p);
+}
+
+std::vector<std::filesystem::path> GetPinnedFolders() {
+    return pinned_folders;
+}
+
 
 std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool folders) {
     std::vector<std::filesystem::path> found;
@@ -66,8 +99,8 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
 #ifdef WIN32
     ImGui::Text("Drives");
     char drive_letter_buffer[512];
-    size_t num_drive_letter_chars = GetLogicalDriveStringsA(sizeof(drive_letter_buffer), drive_letter_buffer);
-    size_t i = 0;
+    int num_drive_letter_chars = GetLogicalDriveStringsA(sizeof(drive_letter_buffer), drive_letter_buffer);
+    int i = 0;
     while (i < num_drive_letter_chars) {
         if (ImGui::Button(&drive_letter_buffer[i])) {
             path = std::string(&drive_letter_buffer[i]);
@@ -77,7 +110,32 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
     }
 #endif
 
-    ImGui::Text("%s", path.string().c_str());
+    if (pinned_folders.size() > 0) {
+        int to_remove = -1;
+        ImGui::PushID("Pinned");
+        ImGui::Text("Pinned");
+        for (i=0; i<pinned_folders.size(); i++) {
+            ImGui::PushID(i);
+            std::string str = NarrowString16To8(pinned_folders[i].wstring());
+            if (ImGui::Button("Unpin")) {
+                to_remove = i;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Open")) {
+                path = pinned_folders[i];
+                needs_dirlist = true;
+            }
+            ImGui::SameLine();
+            ImGui::Text("%s", str.c_str());
+            ImGui::PopID();
+        }
+        if (to_remove >= 0) {
+            pinned_folders.erase(pinned_folders.begin() + to_remove);
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::Text("%s", NarrowString16To8(path.wstring()).c_str());
 
     if (ImGui::Button("..")) {
         path = path.parent_path();
@@ -86,23 +144,61 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
 
     ImGui::Text("Folders");
 
-    for (auto folder : listed_folders) {
-        std::string str = NarrowString16Ti8(folder.filename().wstring());
-        if (ImGui::Button(str.c_str())) {
+    for (i = 0; i < listed_folders.size(); i++) {
+        auto& folder = listed_folders[i];
+        bool can_be_loaded = CanNarrowString16To8(folder.filename().wstring());
+        std::string str = NarrowString16To8(folder.filename().wstring());
+        ImGui::PushID(i);
+        if (!can_be_loaded) {
+            ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
+            ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
+        }
+        if (ImGui::Button("Pin") && can_be_loaded) {
+            AddPinnedFolder(folder);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Open") && can_be_loaded) {
             path = folder;
             needs_dirlist = true;
         }
+        if (!can_be_loaded) {
+            ImGui::SameLine();
+            ImGui::Text("Has Unicode Characters");
+            ImGui::PopStyleColor(4);
+        }
+        ImGui::SameLine();
+        ImGui::Text("%s", str.c_str());
+        ImGui::PopID();
     }
 
     ImGui::Text("Files");
 
-    for (auto file : listed_files) {
-        std::string str = NarrowString16Ti8(file.filename().wstring());
-        if (ImGui::Button(str.c_str())) {
+    for (i = 0; i < listed_files.size(); i++) {
+        auto& file = listed_files[i];
+        bool can_be_loaded = CanNarrowString16To8(file.filename().wstring());
+        std::string str = NarrowString16To8(file.filename().wstring());
+        ImGui::PushID(i);
+        if (!can_be_loaded) {
+            ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
+            ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
+        }
+        if (ImGui::Button("Open") && can_be_loaded) {
             selected = file;
             needs_dirlist = true;
             clicked = true;
         }
+        if (!can_be_loaded) {
+            ImGui::SameLine();
+            ImGui::Text("Has Unicode Characters");
+            ImGui::PopStyleColor(4);
+        }
+        ImGui::SameLine();
+        ImGui::Text("%s", str.c_str());
+        ImGui::PopID();
     }
     ImGui::End();
     return clicked;

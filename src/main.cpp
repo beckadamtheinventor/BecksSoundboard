@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <string_view>
 #include <utility>
 
 class ConfiguredSound {
@@ -27,6 +28,11 @@ class ConfiguredSound {
             length = GetMusicTimeLength(music);
             name = std::string(path.filename().string());
         }
+    void Update() {
+        SetMusicVolume(music, volume);
+        SetMusicPan(music, pan);
+        SetMusicPitch(music, pitch);
+    }
 };
 
 std::vector<ConfiguredSound*> loaded_sounds;
@@ -57,6 +63,7 @@ void __TraceLogCallback(int level, const char* fmt, va_list va) {
 }
 
 int main(int argc, char** argv) {
+    char sprintf_buffer[512];
     SetTraceLogCallback(__TraceLogCallback);
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(1000, 600, "Beck's Soundboard");
@@ -92,6 +99,7 @@ int main(int argc, char** argv) {
         {"current_path", current_path.string()},
         {"currently_playing", ""},
         {"loaded_sounds", {}},
+        {"pinned_folders", {}},
     });
 
     if (config.load()) {
@@ -115,12 +123,13 @@ int main(int argc, char** argv) {
                     if (cfg.contains("pan") && cfg["pan"].is_number()) {
                         cs->pan = cfg["pan"].get<float>();
                     }
-                    if (cfg.contains("rep") && cfg["rep"].is_number()) {
+                    if (cfg.contains("rep") && cfg["rep"].is_boolean()) {
                         cs->repeating = cfg["rep"].get<bool>();
                     }
                 }
                 loaded_sounds.push_back(cs);
                 loaded_sounds_by_path.insert(std::make_pair(cs->path.string(), loaded_sounds.size()-1));
+                cs->Update();
             }
         }
         std::string currently_playing = config.get<std::string>("currently_playing");
@@ -130,6 +139,10 @@ int main(int argc, char** argv) {
                 current_loaded_music = loaded_sounds[current_loaded_music_index];
                 current_loaded_music->started = false;
             }
+        }
+        std::vector<std::string> pinned_folders = config.get<std::vector<std::string>>("pinned_folder");
+        for (auto s : pinned_folders) {
+            AddPinnedFolder(std::filesystem::path(s));
         }
     }
 
@@ -222,7 +235,7 @@ int main(int argc, char** argv) {
                 TraceLog(LOG_ERROR, ("Failed to load sound file: \"" + open_path.string() + "\"").c_str());
             }
             if (now_loaded_music != nullptr) {
-                SetMusicVolume(now_loaded_music->music, now_loaded_music->volume);
+                now_loaded_music->Update();
                 if (current_loaded_music == nullptr) {
                     current_loaded_music = loaded_sounds[(current_loaded_music_index = loaded_sounds.size()-1)];
                 }
@@ -233,58 +246,80 @@ int main(int argc, char** argv) {
             ImGui::Text("%s", current_loaded_music->name.c_str());
             current_loaded_music->time = GetMusicTimePlayed(current_loaded_music->music);
             float music_length = GetMusicTimeLength(current_loaded_music->music);
-            if (!current_loaded_music->repeating && current_loaded_music->time+dt*2.0f >= music_length) {
+            if (!current_loaded_music->repeating && current_loaded_music->time+dt*1.05f >= music_length) {
                 StopMusicStream(current_loaded_music->music);
                 current_loaded_music->started = false;
                 if (play_in_sequence && loaded_sounds.size() > 1) {
                     current_loaded_music_index++;
+                    bool has_wrapped_around = false;
                     if (current_loaded_music_index >= loaded_sounds.size()) {
                         current_loaded_music_index = 0;
+                        has_wrapped_around = true;
+                    }
+                    while (loaded_sounds[current_loaded_music_index] == nullptr) {
+                        current_loaded_music_index++;
+                        if (current_loaded_music_index >= loaded_sounds.size()) {
+                            current_loaded_music_index = 0;
+                            if (has_wrapped_around) {
+                                break;
+                            }
+                            has_wrapped_around = true;
+                        }
                     }
                     current_loaded_music = loaded_sounds[current_loaded_music_index];
-                    PlayMusicStream(current_loaded_music->music);
-                    current_loaded_music->started = true;
+                    if (current_loaded_music != nullptr) {
+                        PlayMusicStream(current_loaded_music->music);
+                        current_loaded_music->started = true;
+                    }
                 }
             }
-            if (ImGui::SliderFloat(std::to_string(music_length).c_str(), &current_loaded_music->time, 0.0f, music_length)) {
-                SeekMusicStream(current_loaded_music->music, current_loaded_music->time);
-            }
-            
-            if (ImGui::Button("Stop")) {
-                StopMusicStream(current_loaded_music->music);
-                current_loaded_music->started = false;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Play")) {
-                if (current_loaded_music->started) {
-                    ResumeMusicStream(current_loaded_music->music);
-                } else {
-                    PlayMusicStream(current_loaded_music->music);
-                    current_loaded_music->started = true;
+            if (current_loaded_music != nullptr) {
+                snprintf(sprintf_buffer, sizeof(sprintf_buffer), "%.3f", current_loaded_music->length);
+                if (ImGui::SliderFloat(sprintf_buffer, &current_loaded_music->time, 0.0f, music_length)) {
+                    SeekMusicStream(current_loaded_music->music, current_loaded_music->time);
                 }
+                
+                if (ImGui::Button("Stop")) {
+                    StopMusicStream(current_loaded_music->music);
+                    current_loaded_music->started = false;
+                    current_loaded_music->time = 0;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Play/Pause")) {
+                    if (IsMusicStreamPlaying(current_loaded_music->music)) {
+                        PauseMusicStream(current_loaded_music->music);
+                    } else {
+                        if (current_loaded_music->started) {
+                            ResumeMusicStream(current_loaded_music->music);
+                        } else {
+                            PlayMusicStream(current_loaded_music->music);
+                            current_loaded_music->started = true;
+                        }
+                    }
+                }
+                ImGui::SameLine();
+                ImGui::SameLine();
+                if (ImGui::Button("Restart")) {
+                    if (IsMusicStreamPlaying(current_loaded_music->music)) {
+                        StopMusicStream(current_loaded_music->music);
+                    }
+                    PlayMusicStream(current_loaded_music->music);
+                }
+                if (ImGui::Checkbox("Repeat", &current_loaded_music->repeating)) {
+                    ;
+                }
+                if (ImGui::SliderFloat("Volume", &current_loaded_music->volume, 0.01f, 1.0f)) {
+                    SetMusicVolume(current_loaded_music->music, current_loaded_music->volume);
+                }
+                if (ImGui::SliderFloat("Pan", &current_loaded_music->pan, 0.0f, 1.0f)) {
+                    SetMusicPan(current_loaded_music->music, 1.0f - current_loaded_music->pan);
+                }
+                if (ImGui::SliderFloat("Speed", &current_loaded_music->pitch, 0.01f, 2.0f)) {
+                    SetMusicPitch(current_loaded_music->music, current_loaded_music->pitch);
+                }
+                ImGui::End();
+                UpdateMusicStream(current_loaded_music->music);
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Pause")) {
-                PauseMusicStream(current_loaded_music->music);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Restart")) {
-                PlayMusicStream(current_loaded_music->music);
-            }
-            if (ImGui::Checkbox("Repeat", &current_loaded_music->repeating)) {
-                ;
-            }
-            if (ImGui::SliderFloat("Volume", &current_loaded_music->volume, 0.0f, 1.0f)) {
-                SetMusicVolume(current_loaded_music->music, current_loaded_music->volume);
-            }
-            if (ImGui::SliderFloat("Pan", &current_loaded_music->pan, 0.0f, 1.0f)) {
-                SetMusicPan(current_loaded_music->music, 1.0f - current_loaded_music->pan);
-            }
-            if (ImGui::SliderFloat("Pitch", &current_loaded_music->pitch, 0.0f, 2.0f)) {
-                SetMusicPitch(current_loaded_music->music, current_loaded_music->pitch);
-            }
-            ImGui::End();
-            UpdateMusicStream(current_loaded_music->music);
         }
         rlImGuiEnd();
         // if (currently_loading_sound) {
@@ -328,6 +363,12 @@ int main(int argc, char** argv) {
     }
     config.set("loaded_sounds", saved_sound_paths);
     config.set("sound_configs", saved_sound_configs);
+    std::vector<std::filesystem::path> pinned_folder_paths = GetPinnedFolders();
+    std::vector<std::string> pinned_folders;
+    for (auto p : pinned_folder_paths) {
+        pinned_folders.push_back(NarrowString16To8(p.wstring()));
+    }
+    config.set("pinned_folders", pinned_folders);
     config.save();
 
     CloseAudioDevice();
