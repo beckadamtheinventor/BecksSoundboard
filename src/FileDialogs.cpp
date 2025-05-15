@@ -100,13 +100,13 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
     ImGui::Text("Drives");
     char drive_letter_buffer[512];
     int num_drive_letter_chars = GetLogicalDriveStringsA(sizeof(drive_letter_buffer), drive_letter_buffer);
-    int i = 0;
-    while (i < num_drive_letter_chars) {
-        if (ImGui::Button(&drive_letter_buffer[i])) {
-            path = std::string(&drive_letter_buffer[i]);
+    int j = 0;
+    while (j < num_drive_letter_chars) {
+        if (ImGui::Button(&drive_letter_buffer[j])) {
+            path = std::string(&drive_letter_buffer[j]);
             needs_dirlist = true;
         }
-        i += strlen(&drive_letter_buffer[i]) + 1;
+        j += strlen(&drive_letter_buffer[j]) + 1;
     }
 #endif
 
@@ -114,7 +114,7 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
         int to_remove = -1;
         ImGui::PushID("Pinned");
         ImGui::Text("Pinned");
-        for (i=0; i<pinned_folders.size(); i++) {
+        for (int i = 0; i < pinned_folders.size(); i++) {
             ImGui::PushID(i);
             std::string str = NarrowString16To8(pinned_folders[i].wstring());
             if (ImGui::Button("Unpin")) {
@@ -144,7 +144,7 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
 
     ImGui::Text("Folders");
 
-    for (i = 0; i < listed_folders.size(); i++) {
+    for (int i = 0; i < listed_folders.size(); i++) {
         auto& folder = listed_folders[i];
         bool can_be_loaded = CanNarrowString16To8(folder.filename().wstring());
         std::string str = NarrowString16To8(folder.filename().wstring());
@@ -175,7 +175,7 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
 
     ImGui::Text("Files");
 
-    for (i = 0; i < listed_files.size(); i++) {
+    for (int i = 0; i < listed_files.size(); i++) {
         auto& file = listed_files[i];
         bool can_be_loaded = CanNarrowString16To8(file.filename().wstring());
         std::string str = NarrowString16To8(file.filename().wstring());
