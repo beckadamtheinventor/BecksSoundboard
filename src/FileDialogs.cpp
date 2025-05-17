@@ -13,11 +13,7 @@
 #include <winbase.h>
 #endif
 
-std::vector<std::filesystem::path> pinned_folders;
-std::vector<std::filesystem::path> listed_folders;
-std::vector<std::filesystem::path> listed_files;
-bool needs_dirlist = true;
-
+namespace FileDialogs {
 
 // create a copy of the string with only the characters that fit in 8 bits.
 // this is a probably a bad way of doing it, but meh
@@ -47,29 +43,27 @@ bool CanNarrowString16To8(std::wstring w) {
     return true;
 }
 
-void AddPinnedFolder(std::filesystem::path p) {
-    for (auto& f : pinned_folders) {
-        if (f == p) {
-            return;
-        }
-    }
-    pinned_folders.push_back(p);
-}
-
-std::vector<std::filesystem::path> GetPinnedFolders() {
-    return pinned_folders;
-}
-
-
-std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool folders) {
+std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool folders, bool recursive) {
     std::vector<std::filesystem::path> found;
-    std::filesystem::directory_iterator iter(path);
-    for (auto file : iter) {
-        if (folders && file.is_directory()) {
-            found.push_back(file.path());
+    if (recursive) {
+        std::filesystem::recursive_directory_iterator iter(path);
+        for (auto file : iter) {
+            if (folders && file.is_directory()) {
+                found.push_back(file.path());
+            }
+            if (!folders && file.is_regular_file()) {
+                found.push_back(file.path());
+            }
         }
-        if (!folders && file.is_regular_file()) {
-            found.push_back(file.path());
+    } else {
+        std::filesystem::directory_iterator iter(path);
+        for (auto file : iter) {
+            if (folders && file.is_directory()) {
+                found.push_back(file.path());
+            }
+            if (!folders && file.is_regular_file()) {
+                found.push_back(file.path());
+            }
         }
     }
     auto& f = std::use_facet<std::ctype<wchar_t>>(std::locale());
@@ -84,7 +78,22 @@ std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool fold
     return found;
 }
 
-bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesystem::path& selected, bool* is_open) {
+
+
+void FileDialog::AddPinnedFolder(std::filesystem::path p) {
+    for (auto& f : pinned_folders) {
+        if (f == p) {
+            return;
+        }
+    }
+    pinned_folders.push_back(p);
+}
+
+std::vector<std::filesystem::path> FileDialog::GetPinnedFolders() {
+    return pinned_folders;
+}
+
+bool FileDialog::Show(std::string title, std::filesystem::path& path, std::filesystem::path& selected, bool* is_open) {
     bool clicked = false;
     if (needs_dirlist) {
         needs_dirlist = false;
@@ -202,4 +211,6 @@ bool OpenFileDialog(std::string title, std::filesystem::path& path, std::filesys
     }
     ImGui::End();
     return clicked;
+}
+
 }
