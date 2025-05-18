@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <locale>
 #include <string>
+
 #include "../thirdparty/imgui-docking/imgui/imgui.h"
 #include "FileDialogs.hpp"
 
@@ -14,6 +15,7 @@
 #endif
 
 namespace FileDialogs {
+std::vector<std::filesystem::path> pinned_folders;
 
 // create a copy of the string with only the characters that fit in 8 bits.
 // this is a probably a bad way of doing it, but meh
@@ -78,9 +80,7 @@ std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool fold
     return found;
 }
 
-
-
-void FileDialog::AddPinnedFolder(std::filesystem::path p) {
+void AddPinnedFolder(std::filesystem::path p) {
     for (auto& f : pinned_folders) {
         if (f == p) {
             return;
@@ -89,11 +89,11 @@ void FileDialog::AddPinnedFolder(std::filesystem::path p) {
     pinned_folders.push_back(p);
 }
 
-std::vector<std::filesystem::path> FileDialog::GetPinnedFolders() {
+std::vector<std::filesystem::path> GetPinnedFolders() {
     return pinned_folders;
 }
 
-bool FileDialog::Show(std::string title, std::filesystem::path& path, std::filesystem::path& selected, bool* is_open) {
+bool FileDialog::Show(std::filesystem::path& selected) {
     bool clicked = false;
     if (needs_dirlist) {
         needs_dirlist = false;
@@ -102,8 +102,8 @@ bool FileDialog::Show(std::string title, std::filesystem::path& path, std::files
         listed_folders = DirList(path, true);
         listed_files = DirList(path, false);
     }
-
-    ImGui::Begin(title.c_str(), is_open);
+    bool is_open = true;
+    ImGui::Begin(title.c_str(), &is_open);
     
 #ifdef WIN32
     ImGui::Text("Drives");
@@ -124,7 +124,7 @@ bool FileDialog::Show(std::string title, std::filesystem::path& path, std::files
         ImGui::PushID("Pinned");
         ImGui::Text("Pinned");
         for (int i = 0; i < pinned_folders.size(); i++) {
-            ImGui::PushID(i);
+            ImGui::PushID(i+1+listed_folders.size()+listed_files.size());
             std::string str = NarrowString16To8(pinned_folders[i].wstring());
             if (ImGui::Button("Unpin")) {
                 to_remove = i;
@@ -157,7 +157,7 @@ bool FileDialog::Show(std::string title, std::filesystem::path& path, std::files
         auto& folder = listed_folders[i];
         bool can_be_loaded = CanNarrowString16To8(folder.filename().wstring());
         std::string str = NarrowString16To8(folder.filename().wstring());
-        ImGui::PushID(i);
+        ImGui::PushID(i+1);
         if (!can_be_loaded) {
             ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
             ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
@@ -182,13 +182,23 @@ bool FileDialog::Show(std::string title, std::filesystem::path& path, std::files
         ImGui::PopID();
     }
 
+    if (saveas) {
+        static char buf[512];
+        ImGui::InputTextWithHint("File Name", "file.json", buf, sizeof(buf));
+        ImGui::SameLine();
+        if (ImGui::Button("Save")) {
+            selected = std::filesystem::path(buf);
+            clicked = true;
+        }
+    }
+
     ImGui::Text("Files");
 
     for (int i = 0; i < listed_files.size(); i++) {
         auto& file = listed_files[i];
         bool can_be_loaded = CanNarrowString16To8(file.filename().wstring());
         std::string str = NarrowString16To8(file.filename().wstring());
-        ImGui::PushID(i);
+        ImGui::PushID(i+1+listed_folders.size());
         if (!can_be_loaded) {
             ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
             ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
@@ -210,6 +220,10 @@ bool FileDialog::Show(std::string title, std::filesystem::path& path, std::files
         ImGui::PopID();
     }
     ImGui::End();
+    if (!is_open) {
+        selected.clear();
+        return true;
+    }
     return clicked;
 }
 

@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     int current_loaded_music_index = -1;
     float global_volume = 1.0f;
     std::filesystem::path current_path = std::filesystem::current_path();
-    FileDialog fileBrowser;
+    FileDialog fileBrowser("Load Sound from Files");
     bool play_in_sequence = false;
     bool scroll_log_to_bottom = true;
 
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
         }
         std::vector<std::string> pinned_folders = config.get<std::vector<std::string>>("pinned_folders");
         for (auto s : pinned_folders) {
-            fileBrowser.AddPinnedFolder(std::filesystem::path(s));
+            AddPinnedFolder(std::filesystem::path(s));
         }
     }
 
@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
         }
         ImGui::End();
         std::filesystem::path open_path;
-        if (fileBrowser.Show("Load Sound from Files", current_path, open_path)) {
+        if (fileBrowser.Show(open_path)) {
             Music sound = LoadMusicStream(open_path.string().c_str());
             ConfiguredMusic* now_loaded_music = nullptr;
             if (IsMusicReady(sound)) {
@@ -278,7 +278,7 @@ int main(int argc, char** argv) {
     }
     config.set("loaded_sounds", saved_sound_paths);
     config.set("sound_configs", saved_sound_configs);
-    std::vector<std::filesystem::path> pinned_folder_paths = fileBrowser.GetPinnedFolders();
+    std::vector<std::filesystem::path> pinned_folder_paths = GetPinnedFolders();
     std::vector<std::string> pinned_folders;
     for (auto p : pinned_folder_paths) {
         pinned_folders.push_back(NarrowString16To8(p.wstring()));
