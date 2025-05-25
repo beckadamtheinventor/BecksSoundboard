@@ -281,8 +281,8 @@ int main(int argc, char** argv) {
             loaded_sounds_by_path.clear();
             auto& f = std::use_facet<std::ctype<wchar_t>>(std::locale());
             std::sort(loaded_sounds.begin(), loaded_sounds.end(), [&f](ConfiguredMusic* ia, ConfiguredMusic* ib) -> bool {
-                std::wstring as = ia->path;
-                std::wstring bs = ib->path;
+                std::wstring as = ia->path.wstring();
+                std::wstring bs = ib->path.wstring();
                 return std::lexicographical_compare(
                     as.begin(), as.end(), bs.begin(), bs.end(), [&f](wchar_t ai, wchar_t bi) {
                         return f.tolower(ai) < f.tolower(bi);
