@@ -4,6 +4,7 @@
 #include "../thirdparty/raylib-5.0/src/raylib.h"
 #include "../thirdparty/imgui-docking/imgui/imgui.h"
 #include "../include/nlohmann/json.hpp"
+#include "FileDialogs.hpp"
 
 class ConfiguredMusic {
     public:
@@ -21,6 +22,20 @@ class ConfiguredMusic {
             name = std::string(path.filename().string());
             end_time = length;
         }
+    static ConfiguredMusic* Load(std::filesystem::path p, nlohmann::json cfg) {
+        Music m = LoadMusicStream(FileDialogs::NarrowString16To8(p.wstring()).c_str());
+        if (!IsMusicReady(m)) {
+            return nullptr;
+        }
+        ConfiguredMusic* cs = new ConfiguredMusic(m, p);
+        cs->Load(cfg);
+        cs->Update();
+        return cs;
+    }
+    void Unload() {
+        UnloadMusicStream(music);
+        music = {0};
+    }
     void Update() {
         SetMusicVolume(music, volume);
         SetMusicPan(music, pan);
@@ -110,7 +125,7 @@ class ConfiguredMusic {
         if (ImGui::Checkbox("Loop", &repeating)) {
             ;
         }
-        if (ImGui::SliderFloat("Volume", &volume, 0.01f, 1.0f)) {
+        if (ImGui::SliderFloat("Volume", &volume, 0.01f, 2.0f)) {
             Volume(volume);
         }
         if (ImGui::Checkbox("Advanced", &show_advanced)) {

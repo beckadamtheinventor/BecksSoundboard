@@ -1,7 +1,11 @@
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <functional>
 #include <map>
+#include <random>
 #include <string>
 #include <utility>
 
@@ -43,6 +47,69 @@ void __TraceLogCallback(int level, const char* fmt, va_list va) {
     console_window_lines.push_back(console_line);
 }
 
+bool ImportSoundList(nlohmann::json j, nlohmann::json sound_configs) {
+    int count = 0;
+    if (!j.contains("paths")) {
+        return false;
+    }
+    nlohmann::json json = j["paths"];
+    if (!json.is_array()) {
+        return false;
+    }
+    for (auto p : json) {
+        if (p.is_string()) {
+            std::string k = p.get<std::string>();
+            nlohmann::json cfg;
+            ConfiguredMusic* cs;
+            if (sound_configs.contains(k)) {
+                cfg = sound_configs[k];
+            }
+            cs = ConfiguredMusic::Load(k, cfg);
+            loaded_sounds.push_back(cs);
+            loaded_sounds_by_path.insert(std::make_pair(k, loaded_sounds.size()-1));
+            count++;
+        }
+    }
+    TraceLog(LOG_INFO, "Imported %d sounds.", count);
+    return true;
+}
+
+bool ImportSoundList(std::string fname, nlohmann::json sound_configs) {
+    std::ifstream fd(fname);
+    if (fd.is_open()) {
+        nlohmann::json json;
+        try {
+            fd >> json;
+            fd.close();
+        } catch (nlohmann::detail::exception error) {
+            TraceLog(LOG_ERROR, "Failed to import sounds from list \"%s\": %s", fname.c_str(), error.what());
+            return false;
+        }
+        return ImportSoundList(json, sound_configs);
+    }
+    return false;
+}
+
+bool ExportSoundList(std::string p, std::map<std::string, unsigned int> paths) {
+    std::ofstream fd(p);
+    if (fd.is_open()) {
+        nlohmann::json json = nlohmann::json::array();
+        for (auto e : paths) {
+            json.push_back(e.first);
+        }
+        json = {{"paths", json}};
+        try {
+            fd << json.dump(-1, ' ', false, nlohmann::detail::error_handler_t::ignore);
+            fd.close();
+            TraceLog(LOG_INFO, "Exported %d sounds.", paths.size());
+            return true;
+        } catch (nlohmann::detail::exception ignored) {}
+    }
+    TraceLog(LOG_ERROR, "Failed to export sound list \"%s\"", p.c_str());
+    return false;
+}
+
+
 int main(int argc, char** argv) {
     SetTraceLogCallback(__TraceLogCallback);
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
@@ -66,12 +133,16 @@ int main(int argc, char** argv) {
     // ImGuiIO& io = ImGui::GetIO();
     // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+    std::random_device random_device;
+    std::mt19937 random_generator(random_device());
+
     // bool currently_loading_sound = false;
     ConfiguredMusic* current_loaded_music = nullptr;
     int current_loaded_music_index = -1;
     float global_volume = 1.0f;
     std::filesystem::path current_path = std::filesystem::current_path();
     FileDialog fileBrowser("Load Sound from Files");
+    FileDialogManager otherFileBrowsers;
     bool play_in_sequence = false;
     bool scroll_log_to_bottom = true;
 
@@ -84,24 +155,22 @@ int main(int argc, char** argv) {
         {"pinned_folders", {}},
     });
 
+    nlohmann::json sound_configs;
     if (config.load()) {
         global_volume = config.get<float>("global_volume");
         play_in_sequence = config.get<bool>("play_in_sequence");
         current_path = std::filesystem::path(config.get<std::string>("current_path"));
         std::vector<std::string> loaded_sound_paths = config.get<std::vector<std::string>>("loaded_sounds");
-        nlohmann::json sound_configs = config.contains("sound_configs") ? config["sound_configs"] : nlohmann::json();
+        sound_configs = config.contains("sound_configs") ? config["sound_configs"] : nlohmann::json();
         for (std::string p : loaded_sound_paths) {
-            Music music = LoadMusicStream(p.c_str());
-            if (IsMusicReady(music)) {
-                auto cs = new ConfiguredMusic(music, std::filesystem::path(p));
-                if (sound_configs.contains(p)) {
-                    nlohmann::json cfg = sound_configs[p];
-                    cs->Load(cfg);
-                }
-                loaded_sounds.push_back(cs);
-                loaded_sounds_by_path.insert(std::make_pair(cs->path.string(), loaded_sounds.size()-1));
-                cs->Update();
+            nlohmann::json cfg;
+            ConfiguredMusic* cs;
+            if (sound_configs.contains(p)) {
+                cfg = sound_configs[p];
             }
+            cs = ConfiguredMusic::Load(p, cfg);
+            loaded_sounds.push_back(cs);
+            loaded_sounds_by_path.insert(std::make_pair(p, loaded_sounds.size()-1));
         }
         std::string currently_playing = config.get<std::string>("currently_playing");
         if (currently_playing.length() > 0) {
@@ -125,6 +194,7 @@ int main(int argc, char** argv) {
         ClearBackground(BLACK);
 
         rlImGuiBegin();
+        otherFileBrowsers.show();
         ImGui::Begin("Options");
         ImGui::SetWindowPos({1.0f, 1.0f}, ImGuiCond_FirstUseEver);
         ImGui::SetWindowSize({400.0f, 200.0f}, ImGuiCond_FirstUseEver);
@@ -150,6 +220,90 @@ int main(int argc, char** argv) {
         ImGui::Begin("Sounds");
         ImGui::SetWindowPos({402.0f, 1.0f}, ImGuiCond_FirstUseEver);
         ImGui::SetWindowSize({400.0f, 200.0f}, ImGuiCond_FirstUseEver);
+        if (ImGui::Button("Import")) {
+            otherFileBrowsers.openIfNotAlready("Import Sound List", [&sound_configs] (std::string p) {
+                return ImportSoundList(p, sound_configs);
+            });
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Export")) {
+            otherFileBrowsers.openIfNotAlready("Export Sound List", [] (std::string p) {
+                return ExportSoundList(p, loaded_sounds_by_path);
+            }, true);
+        }
+        ImGui::SameLine();
+        static bool clear_ays = false;
+        if (ImGui::Button(clear_ays ? "Are you sure?" : "Clear")) {
+            if (clear_ays) {
+                for (auto e : loaded_sounds) {
+                    if (e != nullptr) {
+                        e->Unload();
+                    }
+                }
+                loaded_sounds.clear();
+                loaded_sounds_by_path.clear();
+                current_loaded_music = nullptr;
+                current_loaded_music_index = -1;
+                clear_ays = false;
+            } else {
+                clear_ays = true;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Import Folder")) {
+            otherFileBrowsers.openIfNotAlready("Import from Folder", [&sound_configs] (std::string path) {
+                auto files = DirList(path, false, true);
+                for (auto f : files) {
+                    std::string p = NarrowString16To8(f.wstring());
+                    if (loaded_sounds_by_path.count(p) > 0) {
+                        continue;
+                    }
+                    nlohmann::json cfg;
+                    if (sound_configs.contains(p)) {
+                        cfg = sound_configs[p];
+                    }
+                    ConfiguredMusic* cs;
+                    if ((cs = ConfiguredMusic::Load(p, cfg))) {
+                        loaded_sounds.push_back(cs);
+                        loaded_sounds_by_path.insert(std::make_pair(p, loaded_sounds.size()-1));
+                        TraceLog(LOG_INFO, "Loaded sound file successfuly: \"%s\"", p.c_str());
+                    } else {
+                        TraceLog(LOG_ERROR, "Failed to load sound file: \"%s\"", p.c_str());
+                    }
+                }
+                return false;
+            }, false, true);
+        }
+        if (ImGui::Button("Sort A-Z")) {
+            std::vector<ConfiguredMusic*> newList;
+            for (auto m : loaded_sounds)
+                if (m != nullptr) newList.push_back(m);
+            loaded_sounds_by_path.clear();
+            auto& f = std::use_facet<std::ctype<wchar_t>>(std::locale());
+            std::sort(loaded_sounds.begin(), loaded_sounds.end(), [&f](ConfiguredMusic* ia, ConfiguredMusic* ib) -> bool {
+                std::wstring as = ia->path;
+                std::wstring bs = ib->path;
+                return std::lexicographical_compare(
+                    as.begin(), as.end(), bs.begin(), bs.end(), [&f](wchar_t ai, wchar_t bi) {
+                        return f.tolower(ai) < f.tolower(bi);
+                });
+            });
+            for (unsigned int i = 0; i < loaded_sounds.size(); i++) {
+                loaded_sounds_by_path.insert(std::make_pair(NarrowString16To8(loaded_sounds[i]->path.wstring()), i));
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Shuffle")) {
+            std::vector<ConfiguredMusic*> newList;
+            for (auto m : loaded_sounds)
+                if (m != nullptr) newList.push_back(m);
+            std::shuffle(loaded_sounds.begin(), loaded_sounds.end(), random_generator);
+            loaded_sounds_by_path.clear();
+            for (unsigned int i = 0; i < loaded_sounds.size(); i++) {
+                loaded_sounds_by_path.insert(std::make_pair(NarrowString16To8(loaded_sounds[i]->path.wstring()), i));
+            }
+        }
+
         for (int i=0; i<loaded_sounds.size(); i++) {
             auto sound = loaded_sounds[i];
             if (sound == nullptr) continue;
@@ -196,19 +350,21 @@ int main(int argc, char** argv) {
         ImGui::End();
         std::filesystem::path open_path;
         if (fileBrowser.Show(open_path)) {
-            Music sound = LoadMusicStream(open_path.string().c_str());
-            ConfiguredMusic* now_loaded_music = nullptr;
-            if (IsMusicReady(sound)) {
-                auto cs = new ConfiguredMusic(sound, open_path);
-                loaded_sounds.push_back(cs);
-                loaded_sounds_by_path.insert(std::make_pair(cs->path.string(), loaded_sounds.size()-1));
-                now_loaded_music = loaded_sounds[loaded_sounds.size()-1];
-                TraceLog(LOG_INFO, ("Loaded sound file successfuly: \"" + open_path.string() + "\"").c_str());
-            } else {
-                TraceLog(LOG_ERROR, ("Failed to load sound file: \"" + open_path.string() + "\"").c_str());
+            nlohmann::json cfg;
+            std::string p = NarrowString16To8(open_path.wstring());
+            if (sound_configs.contains(p)) {
+                cfg = sound_configs[p];
             }
-            if (now_loaded_music != nullptr) {
-                now_loaded_music->Update();
+            ConfiguredMusic* cs;
+            if ((cs = ConfiguredMusic::Load(p, cfg))) {
+                loaded_sounds.push_back(cs);
+                loaded_sounds_by_path.insert(std::make_pair(p, loaded_sounds.size()-1));
+                TraceLog(LOG_INFO, "Loaded sound file successfuly: \"%s\"", p.c_str());
+            } else {
+                TraceLog(LOG_ERROR, "Failed to load sound file: \"%s\"", p.c_str());
+            }
+            if (cs != nullptr) {
+                cs->Update();
                 if (current_loaded_music == nullptr) {
                     current_loaded_music = loaded_sounds[(current_loaded_music_index = loaded_sounds.size()-1)];
                 }

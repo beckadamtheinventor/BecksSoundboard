@@ -36,7 +36,7 @@ class JsonConfig {
     bool save() {
         std::ofstream fd(_filename);
         if (fd.is_open()) {
-            fd << _data;
+            fd << _data.dump(1, '\t', false, nlohmann::detail::error_handler_t::ignore);
             fd.close();
             return true;
         }

@@ -154,9 +154,9 @@ bool FileDialog::Show(std::filesystem::path& selected) {
     ImGui::Text("Folders");
 
     for (int i = 0; i < listed_folders.size(); i++) {
-        auto& folder = listed_folders[i];
-        bool can_be_loaded = CanNarrowString16To8(folder.filename().wstring());
-        std::string str = NarrowString16To8(folder.filename().wstring());
+        auto& folderName = listed_folders[i];
+        bool can_be_loaded = CanNarrowString16To8(folderName.filename().wstring());
+        std::string str = NarrowString16To8(folderName.filename().wstring());
         ImGui::PushID(i+1);
         if (!can_be_loaded) {
             ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
@@ -165,12 +165,19 @@ bool FileDialog::Show(std::filesystem::path& selected) {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
         }
         if (ImGui::Button("Pin") && can_be_loaded) {
-            AddPinnedFolder(folder);
+            AddPinnedFolder(folderName);
         }
         ImGui::SameLine();
         if (ImGui::Button("Open") && can_be_loaded) {
-            path = folder;
+            path = folderName;
             needs_dirlist = true;
+        }
+        if (folder) {
+            ImGui::SameLine();
+            if (ImGui::Button(saveas ? "Save As" : "Select") && can_be_loaded) {
+                selected = folderName;
+                clicked = true;
+            }
         }
         if (!can_be_loaded) {
             ImGui::SameLine();
@@ -187,37 +194,39 @@ bool FileDialog::Show(std::filesystem::path& selected) {
         ImGui::InputTextWithHint("File Name", "file.json", buf, sizeof(buf));
         ImGui::SameLine();
         if (ImGui::Button("Save")) {
-            selected = std::filesystem::path(buf);
+            selected = path.append(buf);
             clicked = true;
         }
     }
 
-    ImGui::Text("Files");
+    if (!folder) {
+        ImGui::Text("Files");
 
-    for (int i = 0; i < listed_files.size(); i++) {
-        auto& file = listed_files[i];
-        bool can_be_loaded = CanNarrowString16To8(file.filename().wstring());
-        std::string str = NarrowString16To8(file.filename().wstring());
-        ImGui::PushID(i+1+listed_folders.size());
-        if (!can_be_loaded) {
-            ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
-            ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
-        }
-        if (ImGui::Button("Open") && can_be_loaded) {
-            selected = file;
-            needs_dirlist = true;
-            clicked = true;
-        }
-        if (!can_be_loaded) {
+        for (int i = 0; i < listed_files.size(); i++) {
+            auto& file = listed_files[i];
+            bool can_be_loaded = CanNarrowString16To8(file.filename().wstring());
+            std::string str = NarrowString16To8(file.filename().wstring());
+            ImGui::PushID(i+1+listed_folders.size());
+            if (!can_be_loaded) {
+                ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
+                ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
+            }
+            if (ImGui::Button(saveas ? "Save As" : "Open") && can_be_loaded) {
+                selected = file;
+                needs_dirlist = true;
+                clicked = true;
+            }
+            if (!can_be_loaded) {
+                ImGui::SameLine();
+                ImGui::Text("Has Unicode Characters");
+                ImGui::PopStyleColor(4);
+            }
             ImGui::SameLine();
-            ImGui::Text("Has Unicode Characters");
-            ImGui::PopStyleColor(4);
+            ImGui::Text("%s", str.c_str());
+            ImGui::PopID();
         }
-        ImGui::SameLine();
-        ImGui::Text("%s", str.c_str());
-        ImGui::PopID();
     }
     ImGui::End();
     if (!is_open) {
@@ -226,5 +235,46 @@ bool FileDialog::Show(std::filesystem::path& selected) {
     }
     return clicked;
 }
+
+void FileDialogManager::show() {
+    std::filesystem::path selected;
+    for (int i=0; i<this->size(); i++) {
+        auto& p = this->at(i);
+        if (p.second.first != nullptr) {
+            if (p.second.first->Show(selected)) {
+                if (selected.empty() || p.second.second(NarrowString16To8(selected.wstring()))) {
+                    p.second.first = nullptr;
+                }
+            }
+        }
+    }
+}
+
+bool FileDialogManager::isOpen(std::string title, FileDialog** dialog) {
+    for (auto& p : *this) {
+        if (p.first == title) {
+            if (p.second.first != nullptr) {
+                if (dialog != nullptr) {
+                    *dialog = p.second.first;
+                }
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void FileDialogManager::open(std::string title, std::function<bool(std::string)> cb, bool saveas, bool folder) {
+    this->push_back(std::make_pair(title, std::make_pair(new FileDialog(title, saveas, folder), cb)));
+}
+
+bool FileDialogManager::openIfNotAlready(std::string title, std::function<bool(std::string)> cb, bool saveas, bool folder) {
+    if (isOpen(title)) {
+        return false;
+    }
+    open(title, cb, saveas, folder);
+    return true;
+}
+
 
 }

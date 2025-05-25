@@ -1,7 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace FileDialogs {
@@ -12,15 +14,24 @@ namespace FileDialogs {
     std::vector<std::filesystem::path> GetPinnedFolders();
 
     class FileDialog {
-        bool needs_dirlist = true, saveas = false;
+        bool needs_dirlist=true, saveas, folder;
         std::filesystem::path path;
         std::string title;
         protected:
         std::vector<std::filesystem::path> listed_folders;
         std::vector<std::filesystem::path> listed_files;
         public:
-        FileDialog(std::string title, std::filesystem::path path, bool saveas=false) : title(title), path(path), saveas(saveas) {}
-        FileDialog(std::string title, bool saveas=false) : title(title), path(std::filesystem::current_path()), saveas(saveas) {}
+        FileDialog(std::string title, std::filesystem::path path, bool saveas=false, bool folder=false) : title(title), path(path), saveas(saveas), folder(folder) {}
+        FileDialog(std::string title, bool saveas=false, bool folder=false) : title(title), path(std::filesystem::current_path()), saveas(saveas), folder(folder) {}
         bool Show(std::filesystem::path& selected);
+    };
+
+    class FileDialogManager :
+    protected std::vector<std::pair<std::string,std::pair<FileDialog*,std::function<bool (std::string)>>>> {
+        public:
+        void show();
+        bool isOpen(std::string name, FileDialog** dialog=nullptr);
+        void open(std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false);
+        bool openIfNotAlready(std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false);
     };
 }
