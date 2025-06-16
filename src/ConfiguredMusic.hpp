@@ -87,13 +87,16 @@ class ConfiguredMusic {
         pitch = v;
         SetMusicPitch(music, pitch);
     }
-    // returns true unless the music has ended and is not set to loop.
-    bool Show(float dt) {
+    // returns 0 if the music is playing.
+    // returns 1 if the music has ended and is not set to loop.
+    // returns 2 if the previous button was pressed.
+    // returns 3 if the next button was pressed.
+    int Show(float dt) {
         time = Tell();
         ImGui::Begin("Audio Controls");
         ImGui::Text("%s", name.c_str());
-        bool ended = false;
-        if ((ended = ShouldEnd(dt))) {
+        int rval = 0;
+        if ((rval = ShouldEnd(dt))) {
             Stop();
             if (repeating) {
                 Start();
@@ -105,7 +108,10 @@ class ConfiguredMusic {
         if (ImGui::SliderFloat(sprintf_buffer, &time, start_time, end_time)) {
             Seek(time);
         }
-        
+        if (ImGui::Button("Prev")) {
+            rval = 2;
+        }
+        ImGui::SameLine();
         if (ImGui::Button("Stop")) {
             Stop();
         }
@@ -121,6 +127,10 @@ class ConfiguredMusic {
         if (ImGui::Button("Restart")) {
             Stop();
             Start();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Next")) {
+            rval = 3;
         }
         if (ImGui::Checkbox("Loop", &repeating)) {
             ;
@@ -152,7 +162,7 @@ class ConfiguredMusic {
             }
         }
         ImGui::End();
-        return !ended;
+        return rval;
     }
     void UpdateStream() {
         UpdateMusicStream(music);

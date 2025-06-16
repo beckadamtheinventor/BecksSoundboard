@@ -28,6 +28,7 @@ std::map<std::string, unsigned int> loaded_sounds_by_path;
 std::map<unsigned int, unsigned int> sound_keybinds;
 std::vector<std::string> console_window_lines;
 std::vector<ma_device_info> available_playback_devices;
+int selected_playback_device = -1;
 
 void __TraceLogCallback(int level, const char* fmt, va_list va) {
     std::string levels[] = {
@@ -217,17 +218,23 @@ int main(int argc, char** argv) {
         }
         if (ImGui::Checkbox("Play in Sequence", &play_in_sequence)) {}
         if (ImGui::Checkbox("Scroll Log to Bottom", &scroll_log_to_bottom)) {}
+        if (selected_playback_device >= 0) {
+            ImGui::Text("Output Device: %s", available_playback_devices[selected_playback_device].name);
+        } else {
+            ImGui::Text("Output Device: Default");
+        }
         ImGui::Text("Available Playback Devices");
         for (int i=0; i<available_playback_devices.size(); i++) {
-            auto dev = &available_playback_devices[i];
+            auto& dev = available_playback_devices[i];
             ImGui::PushID(i);
             if (ImGui::Button("Select")) {
                 CloseAudioDevice();
-                InitAudioDeviceByID(&dev->id);
+                InitAudioDeviceByID(&dev.id);
+                selected_playback_device = i;
                 SetMasterVolume(global_volume);
             }
             ImGui::SameLine();
-            ImGui::Text("%s", dev->name);
+            ImGui::Text("%s", dev.name);
             ImGui::PopID();
         }
         ImGui::End();
@@ -389,7 +396,9 @@ int main(int argc, char** argv) {
             }
         }
         if (current_loaded_music) {
-            if (!current_loaded_music->Show(dt)) {
+            int action = current_loaded_music->Show(dt);
+            bool load_new_song = true;
+            if (action == 1) {
                 if (play_in_sequence && loaded_sounds.size() > 1) {
                     current_loaded_music_index++;
                     bool has_wrapped_around = false;
@@ -407,11 +416,51 @@ int main(int argc, char** argv) {
                             has_wrapped_around = true;
                         }
                     }
-                    current_loaded_music = loaded_sounds[current_loaded_music_index];
-                    if (current_loaded_music != nullptr) {
-                        PlayMusicStream(current_loaded_music->music);
-                        current_loaded_music->started = true;
+                }
+            } else if (action == 2) {
+                // previous
+                current_loaded_music_index--;
+                bool has_wrapped_around = false;
+                if (current_loaded_music_index < 0) {
+                    current_loaded_music_index = loaded_sounds.size() - 1;
+                    has_wrapped_around = true;
+                }
+                while (loaded_sounds[current_loaded_music_index] == nullptr) {
+                    if (current_loaded_music_index < 0) {
+                        current_loaded_music_index = loaded_sounds.size();
+                        if (has_wrapped_around) {
+                            break;
+                        }
+                        has_wrapped_around = true;
                     }
+                    current_loaded_music_index--;
+                }
+            } else if (action == 3) {
+                // previous
+                current_loaded_music_index++;
+                bool has_wrapped_around = false;
+                if (current_loaded_music_index >= loaded_sounds.size()) {
+                    current_loaded_music_index = 0;
+                    has_wrapped_around = true;
+                }
+                while (loaded_sounds[current_loaded_music_index] == nullptr) {
+                    if (current_loaded_music_index >= loaded_sounds.size()) {
+                        current_loaded_music_index = 0;
+                        if (has_wrapped_around) {
+                            break;
+                        }
+                        has_wrapped_around = true;
+                    }
+                    current_loaded_music_index++;
+                }
+            } else {
+                load_new_song = false;
+            }
+            if (load_new_song && current_loaded_music_index < loaded_sounds.size()) {
+                current_loaded_music = loaded_sounds[current_loaded_music_index];
+                if (current_loaded_music != nullptr) {
+                    PlayMusicStream(current_loaded_music->music);
+                    current_loaded_music->started = true;
                 }
             }
         }
