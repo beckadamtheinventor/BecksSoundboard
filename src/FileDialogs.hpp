@@ -31,7 +31,13 @@ namespace FileDialogs {
         public:
         void show();
         bool isOpen(std::string name, FileDialog** dialog=nullptr);
-        void open(std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false);
-        bool openIfNotAlready(std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false);
+        void open(std::string id, std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false);
+        void open(std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false){
+            open(title, title, cb, saveas, folder);
+        }
+        bool openIfNotAlready(std::string id, std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false);
+        bool openIfNotAlready(std::string title, std::function<bool(std::string)> cb, bool saveas=false, bool folder=false){ 
+            return openIfNotAlready(title, title, cb, saveas, folder);
+        }
     };
 }

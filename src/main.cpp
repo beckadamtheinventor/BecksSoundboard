@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
@@ -6,7 +7,9 @@
 #include <functional>
 #include <map>
 #include <random>
+#include <ratio>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "../include/nlohmann/json.hpp"
@@ -188,8 +191,19 @@ int main(int argc, char** argv) {
 
     SetMasterVolume(global_volume);
 
+    std::thread musicUpdater = std::thread([&current_loaded_music] () {
+        while (!WindowShouldClose()) {
+            if (current_loaded_music) {
+                current_loaded_music->UpdateStream();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
+        }
+    });
+
     while (!WindowShouldClose()) {
         static float dt = 0;
+
+
         BeginDrawing();
         ClearBackground(BLACK);
 
@@ -278,9 +292,8 @@ int main(int argc, char** argv) {
             std::vector<ConfiguredMusic*> newList;
             for (auto m : loaded_sounds)
                 if (m != nullptr) newList.push_back(m);
-            loaded_sounds_by_path.clear();
             auto& f = std::use_facet<std::ctype<wchar_t>>(std::locale());
-            std::sort(loaded_sounds.begin(), loaded_sounds.end(), [&f](ConfiguredMusic* ia, ConfiguredMusic* ib) -> bool {
+            std::sort(newList.begin(), newList.end(), [&f](ConfiguredMusic* ia, ConfiguredMusic* ib) -> bool {
                 std::wstring as = ia->path.wstring();
                 std::wstring bs = ib->path.wstring();
                 return std::lexicographical_compare(
@@ -288,6 +301,9 @@ int main(int argc, char** argv) {
                         return f.tolower(ai) < f.tolower(bi);
                 });
             });
+            loaded_sounds.clear();
+            loaded_sounds_by_path.clear();
+            loaded_sounds = newList;
             for (unsigned int i = 0; i < loaded_sounds.size(); i++) {
                 loaded_sounds_by_path.insert(std::make_pair(NarrowString16To8(loaded_sounds[i]->path.wstring()), i));
             }
@@ -297,8 +313,10 @@ int main(int argc, char** argv) {
             std::vector<ConfiguredMusic*> newList;
             for (auto m : loaded_sounds)
                 if (m != nullptr) newList.push_back(m);
-            std::shuffle(loaded_sounds.begin(), loaded_sounds.end(), random_generator);
+            std::shuffle(newList.begin(), newList.end(), random_generator);
+            loaded_sounds.clear();
             loaded_sounds_by_path.clear();
+            loaded_sounds = newList;
             for (unsigned int i = 0; i < loaded_sounds.size(); i++) {
                 loaded_sounds_by_path.insert(std::make_pair(NarrowString16To8(loaded_sounds[i]->path.wstring()), i));
             }
@@ -444,6 +462,7 @@ int main(int argc, char** argv) {
 
     CloseAudioDevice();
     CloseWindow();
+    musicUpdater.join();
 
     return 0;
 }

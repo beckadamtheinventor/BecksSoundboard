@@ -152,8 +152,10 @@ class ConfiguredMusic {
             }
         }
         ImGui::End();
-        UpdateMusicStream(music);
         return !ended;
+    }
+    void UpdateStream() {
+        UpdateMusicStream(music);
     }
     void Load(nlohmann::json cfg) {
         if (cfg.contains("v") && cfg["v"].is_number()) {

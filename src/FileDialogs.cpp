@@ -250,9 +250,9 @@ void FileDialogManager::show() {
     }
 }
 
-bool FileDialogManager::isOpen(std::string title, FileDialog** dialog) {
+bool FileDialogManager::isOpen(std::string id, FileDialog** dialog) {
     for (auto& p : *this) {
-        if (p.first == title) {
+        if (p.first == id) {
             if (p.second.first != nullptr) {
                 if (dialog != nullptr) {
                     *dialog = p.second.first;
@@ -264,15 +264,15 @@ bool FileDialogManager::isOpen(std::string title, FileDialog** dialog) {
     return false;
 }
 
-void FileDialogManager::open(std::string title, std::function<bool(std::string)> cb, bool saveas, bool folder) {
-    this->push_back(std::make_pair(title, std::make_pair(new FileDialog(title, saveas, folder), cb)));
+void FileDialogManager::open(std::string id, std::string title, std::function<bool(std::string)> cb, bool saveas, bool folder) {
+    this->push_back(std::make_pair(id, std::make_pair(new FileDialog(title, saveas, folder), cb)));
 }
 
-bool FileDialogManager::openIfNotAlready(std::string title, std::function<bool(std::string)> cb, bool saveas, bool folder) {
-    if (isOpen(title)) {
+bool FileDialogManager::openIfNotAlready(std::string id, std::string title, std::function<bool(std::string)> cb, bool saveas, bool folder) {
+    if (isOpen(id)) {
         return false;
     }
-    open(title, cb, saveas, folder);
+    open(id, title, cb, saveas, folder);
     return true;
 }
 
