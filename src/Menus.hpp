@@ -17,7 +17,7 @@ namespace Menus {
         template<class T>
         T* add(T* menu) {
             push_back(menu);
-            return at(size() - 1);
+            return (T*)at(size() - 1);
         }
     };
 
