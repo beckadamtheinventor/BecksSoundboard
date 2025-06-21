@@ -38,6 +38,8 @@ bool scroll_log_to_bottom = true;
 
 namespace Menus {
 
+    #pragma region Helper Functions
+
     bool ImportSoundList(nlohmann::json j, nlohmann::json sound_configs) {
         int count = 0;
         if (!j.contains("paths")) {
@@ -100,7 +102,9 @@ namespace Menus {
         return false;
     }
 
+    #pragma endregion
 
+    #pragma region Options Menu
     void OptionsMenu::show() {
         ImGui::Begin("Options");
         ImGui::SetWindowPos({1.0f, 1.0f}, ImGuiCond_FirstUseEver);
@@ -131,7 +135,9 @@ namespace Menus {
         }
         ImGui::End();
     }
+    #pragma endregion
 
+    #pragma region Sounds Menu
     void SoundsMenu::show() {
         ImGui::Begin("Sounds");
         ImGui::SetWindowPos({402.0f, 1.0f}, ImGuiCond_FirstUseEver);
@@ -258,7 +264,9 @@ namespace Menus {
         }
         ImGui::End();
     }
+    #pragma endregion
 
+    #pragma region Console Menu
     void ConsoleMenu::show() {
         ImGui::Begin("Console");
         ImGui::SetWindowPos({1.0f, 302.0f}, ImGuiCond_FirstUseEver);
@@ -272,5 +280,6 @@ namespace Menus {
         }
         ImGui::End();
     }
+    #pragma endregion
 
 }

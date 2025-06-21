@@ -1,10 +1,7 @@
-#include <algorithm>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
-#include <functional>
 #include <map>
 #include <random>
 #include <string>
@@ -65,6 +62,7 @@ void __TraceLogCallback(int level, const char* fmt, va_list va) {
 }
 
 int main(int argc, char** argv) {
+    #pragma region Initialization
     SetTraceLogCallback(__TraceLogCallback);
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(1200, 600, "Beck's Soundboard");
@@ -91,7 +89,9 @@ int main(int argc, char** argv) {
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     }
+    #pragma endregion
 
+    #pragma region Config Loading
     JsonConfig config("config.json", {
         {"global_volume", global_volume},
         {"play_in_sequence", play_in_sequence},
@@ -130,6 +130,7 @@ int main(int argc, char** argv) {
             AddPinnedFolder(std::filesystem::path(s));
         }
     }
+    #pragma endregion
 
     SetMasterVolume(global_volume);
 
@@ -146,6 +147,7 @@ int main(int argc, char** argv) {
     menuManager.add(new Menus::SoundsMenu());
     menuManager.add(new Menus::ConsoleMenu());
 
+    #pragma region Main Loop
     while (!WindowShouldClose()) {
         static float dt = 0;
 
@@ -157,7 +159,7 @@ int main(int argc, char** argv) {
         menuManager.show();
 
         std::filesystem::path open_path;
-        if (fileBrowser.Show(open_path)) {
+        if (fileBrowser.Show(open_path) && !open_path.empty()) {
             nlohmann::json cfg;
             std::string p = NarrowString16To8(open_path.wstring());
             if (sound_configs.contains(p)) {
@@ -264,7 +266,9 @@ int main(int argc, char** argv) {
         EndDrawing();
         dt = GetFrameTime();
     }
+    #pragma endregion
 
+    #pragma region Config Saving
     config.set("global_volume", global_volume);
     config.set("play_in_sequence", play_in_sequence);
     config.set("current_path", current_path.string());
@@ -291,6 +295,8 @@ int main(int argc, char** argv) {
     }
     config.set("pinned_folders", pinned_folders);
     config.save();
+
+    #pragma endregion
 
     CloseAudioDevice();
     CloseWindow();
