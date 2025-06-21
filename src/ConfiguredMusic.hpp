@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <math.h>
 
 #include "../thirdparty/raylib-5.0/src/raylib.h"
 #include "../thirdparty/imgui-docking/imgui/imgui.h"
@@ -42,9 +43,9 @@ class ConfiguredMusic {
         SetMusicPitch(music, pitch);
     }
     void Stop() {
-        StopMusicStream(music);
         started = false;
         time = 0.0f;
+        StopMusicStream(music);
     }
     void Play() {
         PlayMusicStream(music);
@@ -67,7 +68,9 @@ class ConfiguredMusic {
         }
     }
     void Seek(float t) {
-        SeekMusicStream(music, t);
+        if (t < GetMusicTimeLength(music)) {
+            SeekMusicStream(music, t);
+        }
     }
     bool ShouldEnd(float dt) {
         return Tell()+dt*0.95f >= end_time;
@@ -100,15 +103,33 @@ class ConfiguredMusic {
             Stop();
             if (repeating) {
                 Start();
+                rval = 0;
             }
         }
 
-        char sprintf_buffer[8];
-        snprintf(sprintf_buffer, sizeof(sprintf_buffer), "%.3f", end_time);
-        if (ImGui::SliderFloat(sprintf_buffer, &time, start_time, end_time)) {
+        if (end_time >= length) {
+            end_time = length;
+        }
+        if (start_time < 0) {
+            start_time = 0;
+        }
+        if (ImGui::SliderFloat("seek", &time, start_time, end_time)) {
+            if (IsMusicStreamPlaying(music)) {
+                Pause();
+            }
             Seek(time);
         }
-        if (ImGui::Button("Prev")) {
+        ImGui::Text("%d:%02d:%02d.%03d / %d:%02d:%02d.%03d",
+            int(floorf(time/3600.0f)), // hours
+            int(fmodf(floorf(time/60.0f), 60.0f)), // minutes
+            int(fmodf(time, 60.0f)), // seconds
+            int(fmodf(time*1000.0f, 1000.0f)), // milliseconds
+            int(floorf(length/3600.0f)), // hours
+            int(fmodf(floorf(length/60.0f), 60.0f)), // minutes
+            int(fmodf(length, 60.0f)), // seconds
+            int(fmodf(length*1000.0f, 1000.0f)) // milliseconds
+        );
+        if (ImGui::Button("<")) {
             rval = 2;
         }
         ImGui::SameLine();
@@ -129,7 +150,7 @@ class ConfiguredMusic {
             Start();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Next")) {
+        if (ImGui::Button(">")) {
             rval = 3;
         }
         if (ImGui::Checkbox("Loop", &repeating)) {
@@ -189,6 +210,9 @@ class ConfiguredMusic {
         if (cfg.contains("et") && cfg["et"].is_number()) {
             end_time = cfg["et"].get<float>();
         }
+        if (cfg.contains("t") && cfg["t"].is_number()) {
+            Seek(cfg["t"].get<float>());
+        }
     }
     nlohmann::json Save() {
         return {
@@ -197,6 +221,7 @@ class ConfiguredMusic {
             {"p", pan},
             {"r", repeating},
             {"a", show_advanced},
+            {"t", Tell()},
             {"st", start_time},
             {"et", end_time},
         };

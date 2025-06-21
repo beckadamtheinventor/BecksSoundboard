@@ -7,7 +7,6 @@
 #include <functional>
 #include <map>
 #include <random>
-#include <ratio>
 #include <string>
 #include <thread>
 #include <utility>
@@ -22,6 +21,7 @@
 #include "FileDialogs.hpp"
 using namespace FileDialogs;
 #include "ConfiguredMusic.hpp"
+#include "Hooks.hpp"
 
 std::vector<ConfiguredMusic*> loaded_sounds;
 std::map<std::string, unsigned int> loaded_sounds_by_path;
@@ -117,7 +117,7 @@ bool ExportSoundList(std::string p, std::map<std::string, unsigned int> paths) {
 int main(int argc, char** argv) {
     SetTraceLogCallback(__TraceLogCallback);
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
-    InitWindow(1000, 600, "Beck's Soundboard");
+    InitWindow(1200, 600, "Beck's Soundboard");
     SetTargetFPS(60);
     SetExitKey(-1);
     InitAudioDevice();
@@ -132,11 +132,15 @@ int main(int argc, char** argv) {
     for (unsigned int i=0; i<playbackDevicesCount; i++) {
         available_playback_devices.push_back(playbackDevices[i]);
     }
-
-    rlImGuiSetup(true);
-    // ImGuiIO& io = ImGui::GetIO();
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-
+    // set up ImGUI
+    {
+        rlImGuiSetup(true);
+        ImGui::StyleColorsDark();
+        ImGuiIO &io = ImGui::GetIO();
+        io.FontGlobalScale = 1.2f;
+        io.ConfigWindowsMoveFromTitleBarOnly = true;
+        // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    }
     std::random_device random_device;
     std::mt19937 random_generator(random_device());
 
@@ -204,7 +208,6 @@ int main(int argc, char** argv) {
     while (!WindowShouldClose()) {
         static float dt = 0;
 
-
         BeginDrawing();
         ClearBackground(BLACK);
 
@@ -212,7 +215,7 @@ int main(int argc, char** argv) {
         otherFileBrowsers.show();
         ImGui::Begin("Options");
         ImGui::SetWindowPos({1.0f, 1.0f}, ImGuiCond_FirstUseEver);
-        ImGui::SetWindowSize({400.0f, 200.0f}, ImGuiCond_FirstUseEver);
+        ImGui::SetWindowSize({400.0f, 300.0f}, ImGuiCond_FirstUseEver);
         if (ImGui::SliderFloat("Volume", &global_volume, 0.0f, 1.0f)) {
             SetMasterVolume(global_volume);
         }
@@ -363,7 +366,7 @@ int main(int argc, char** argv) {
         }
         ImGui::End();
         ImGui::Begin("Console");
-        ImGui::SetWindowPos({1.0f, 202.0f}, ImGuiCond_FirstUseEver);
+        ImGui::SetWindowPos({1.0f, 302.0f}, ImGuiCond_FirstUseEver);
         ImGui::SetWindowSize({400.0f, 200.0f}, ImGuiCond_FirstUseEver);
         for (auto line : console_window_lines) {
             if (line.size() > 0)

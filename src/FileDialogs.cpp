@@ -104,7 +104,8 @@ bool FileDialog::Show(std::filesystem::path& selected) {
     }
     bool is_open = true;
     ImGui::Begin(title.c_str(), &is_open);
-    
+    ImGui::SetWindowPos({802.0f, 1.0f}, ImGuiCond_FirstUseEver);
+    ImGui::SetWindowSize({400.0f, 600.0f}, ImGuiCond_FirstUseEver);
 #ifdef WIN32
     ImGui::Text("Drives");
     char drive_letter_buffer[512];
@@ -116,6 +117,9 @@ bool FileDialog::Show(std::filesystem::path& selected) {
             needs_dirlist = true;
         }
         j += strlen(&drive_letter_buffer[j]) + 1;
+        if (j < num_drive_letter_chars) {
+            ImGui::SameLine();
+        }
     }
 #endif
 
@@ -126,11 +130,11 @@ bool FileDialog::Show(std::filesystem::path& selected) {
         for (int i = 0; i < pinned_folders.size(); i++) {
             ImGui::PushID(i+1+listed_folders.size()+listed_files.size());
             std::string str = NarrowString16To8(pinned_folders[i].wstring());
-            if (ImGui::Button("Unpin")) {
+            if (ImGui::Button("X")) {
                 to_remove = i;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Open")) {
+            if (ImGui::Button(">")) {
                 path = pinned_folders[i];
                 needs_dirlist = true;
             }
@@ -146,7 +150,7 @@ bool FileDialog::Show(std::filesystem::path& selected) {
 
     ImGui::Text("%s", NarrowString16To8(path.wstring()).c_str());
 
-    if (ImGui::Button("..")) {
+    if (ImGui::Button("Back/Up")) {
         path = path.parent_path();
         needs_dirlist = true;
     }
@@ -164,17 +168,17 @@ bool FileDialog::Show(std::filesystem::path& selected) {
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
         }
-        if (ImGui::Button("Pin") && can_be_loaded) {
+        if (ImGui::Button("+") && can_be_loaded) {
             AddPinnedFolder(folderName);
         }
         ImGui::SameLine();
-        if (ImGui::Button("Open") && can_be_loaded) {
+        if (ImGui::Button(">") && can_be_loaded) {
             path = folderName;
             needs_dirlist = true;
         }
         if (folder) {
             ImGui::SameLine();
-            if (ImGui::Button(saveas ? "Save As" : "Select") && can_be_loaded) {
+            if (ImGui::Button(saveas ? "Save As" : "S") && can_be_loaded) {
                 selected = folderName;
                 clicked = true;
             }
@@ -193,7 +197,7 @@ bool FileDialog::Show(std::filesystem::path& selected) {
         static char buf[512];
         ImGui::InputTextWithHint("File Name", "file.json", buf, sizeof(buf));
         ImGui::SameLine();
-        if (ImGui::Button("Save")) {
+        if (ImGui::Button("S")) {
             selected = path.append(buf);
             clicked = true;
         }
@@ -213,7 +217,7 @@ bool FileDialog::Show(std::filesystem::path& selected) {
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
             }
-            if (ImGui::Button(saveas ? "Save As" : "Open") && can_be_loaded) {
+            if (ImGui::Button(saveas ? "Save As" : "+") && can_be_loaded) {
                 selected = file;
                 needs_dirlist = true;
                 clicked = true;
