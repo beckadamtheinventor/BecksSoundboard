@@ -7,6 +7,7 @@
 #include <vector>
 
 namespace FileDialogs {
+
     std::string NarrowString16To8(std::wstring w);
     std::wstring ExpandString8To16(std::string s);
     std::vector<std::filesystem::path> DirList(std::filesystem::path path, bool folders=false, bool recursive=false);
@@ -14,7 +15,7 @@ namespace FileDialogs {
     std::vector<std::filesystem::path> GetPinnedFolders();
 
     class FileDialog {
-        bool needs_dirlist=true, saveas, folder;
+        bool needs_dirlist=true, saveas, folder, allow_close=true;
         std::filesystem::path path;
         std::string title;
         protected:
@@ -23,6 +24,7 @@ namespace FileDialogs {
         public:
         FileDialog(std::string title, std::filesystem::path path, bool saveas=false, bool folder=false) : title(title), path(path), saveas(saveas), folder(folder) {}
         FileDialog(std::string title, bool saveas=false, bool folder=false) : title(title), path(std::filesystem::current_path()), saveas(saveas), folder(folder) {}
+        void SetPersistent(bool persistent=true);
         bool Show(std::filesystem::path& selected);
     };
 

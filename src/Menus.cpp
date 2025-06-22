@@ -12,21 +12,21 @@
 
 #include "ConfiguredMusic.hpp"
 #include "FileDialogs.hpp"
-using namespace FileDialogs;
+#include "ImGuiThemeFile.hpp"
 #include "Menus.hpp"
+#include "Hooks.hpp"
+using namespace FileDialogs;
 
 
 std::vector<ConfiguredMusic*> loaded_sounds;
 std::map<std::string, unsigned int> loaded_sounds_by_path;
-std::map<unsigned int, unsigned int> sound_keybinds;
 std::vector<std::string> console_window_lines;
 std::vector<ma_device_info> available_playback_devices;
 int selected_playback_device = -1;
 
-std::filesystem::path current_path = std::filesystem::current_path();
-FileDialog fileBrowser("Load Sound from Files");
 FileDialogManager otherFileBrowsers;
 Menus::MenuManager menuManager;
+ImGui::ThemeFile global_style;
 nlohmann::json sound_configs;
 std::random_device random_device;
 std::mt19937 random_generator(random_device());
@@ -35,6 +35,8 @@ int current_loaded_music_index = -1;
 float global_volume = 1.0f;
 bool play_in_sequence = false;
 bool scroll_log_to_bottom = true;
+bool hook_available = false;
+std::map<int, std::string> sound_keybinds;
 
 namespace Menus {
 
@@ -113,6 +115,7 @@ namespace Menus {
             SetMasterVolume(global_volume);
         }
         if (ImGui::Checkbox("Play in Sequence", &play_in_sequence)) {}
+        ImGui::SameLine();
         if (ImGui::Checkbox("Scroll Log to Bottom", &scroll_log_to_bottom)) {}
         if (selected_playback_device >= 0) {
             ImGui::Text("Output Device: %s", available_playback_devices[selected_playback_device].name);
@@ -279,6 +282,73 @@ namespace Menus {
             ImGui::SetScrollY(ImGui::GetCursorPosY() - ImGui::GetWindowHeight());
         }
         ImGui::End();
+    }
+    #pragma endregion
+
+    #pragma region Theme Menu
+    void ThemeMenu::show() {
+        ImGui::Begin("Theme");
+        if (ImGui::Button("Import from File")) {
+            otherFileBrowsers.openIfNotAlready("Import Theme from File", [] (std::string fname) {
+                if (fname.length()) {
+                    bool rv = global_style.load(fname);
+                    if (rv) global_style.apply();
+                    return rv;
+                }
+                return false;
+            });
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Export to File")) {
+            otherFileBrowsers.openIfNotAlready("Export Theme to File", [] (std::string fname) {
+                if (fname.length()) {
+                    return global_style.save(fname);
+                }
+                return false;
+            }, true);
+        }
+        ImGui::Text("Note: make sure to click \"save ref\" before exporting!");
+        ImGui::SeparatorText("Theme Configurator");
+        ImGui::ShowStyleEditor(global_style);
+        ImGui::End();
+    }
+    #pragma endregion
+
+    #pragma region Keybind Manager Window
+    void HookManagerMenu::show() {
+        ImGui::Begin("Keybinds");
+        auto bound = Hooks::GetBoundKeycodes();
+        int remove = -1;
+        for (int i=0; i<bound.size(); i++) {
+            ImGui::PushID(i);
+            if (ImGui::Button("X")) {
+                Hooks::BindKeycode(bound[i], false);
+                sound_keybinds.erase(bound[i]);
+            }
+            ImGui::SameLine();
+            ImGui::Text("%s %s", bound[i].tostring().c_str(), sound_keybinds[(int)bound[i]].c_str());
+            ImGui::PopID();
+        }
+        if (remove >= 0) {
+            Hooks::BindKeycode(bound[remove], false);
+        }
+        if (ImGui::Button("Add Keybind")) {
+            ImGui::End();
+            int vk = 0;
+            Hooks::ClearLastKeycode();
+            while (!vk) {
+                EndDrawing();
+                BeginDrawing();
+                ClearBackground(BLACK);
+                DrawText("Press a key", 32, 32, 32, WHITE);
+                vk = Hooks::GetLastKeycode();
+            }
+            Hooks::BindKeycode(vk);
+            sound_keybinds[vk] = NarrowString16To8(current_loaded_music->path.wstring());
+        } else {
+            ImGui::Text("(to play currently loaded music)");
+            ImGui::End();
+        }
     }
     #pragma endregion
 

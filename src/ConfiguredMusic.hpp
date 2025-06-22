@@ -73,7 +73,7 @@ class ConfiguredMusic {
         }
     }
     bool ShouldEnd(float dt) {
-        return Tell()+dt*0.95f >= end_time;
+        return Tell()+dt >= std::min(end_time, length);
     }
     float Tell() {
         return GetMusicTimePlayed(music);

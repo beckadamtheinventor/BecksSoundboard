@@ -14,6 +14,7 @@
 #include "../thirdparty/rlImGui/rlImGui.h"
 #include "../thirdparty/imgui-docking/imgui/imgui.h"
 
+#include "ImGuiThemeFile.hpp"
 #include "JsonConfig.hpp"
 #include "FileDialogs.hpp"
 #include "Menus.hpp"
@@ -23,22 +24,26 @@ using namespace FileDialogs;
 
 extern std::vector<ConfiguredMusic*> loaded_sounds;
 extern std::map<std::string, unsigned int> loaded_sounds_by_path;
-extern std::map<unsigned int, unsigned int> sound_keybinds;
+extern std::map<int, std::string> sound_keybinds;
 extern std::vector<std::string> console_window_lines;
 extern std::vector<ma_device_info> available_playback_devices;
 extern int selected_playback_device;
-extern std::filesystem::path current_path;
-extern FileDialogs::FileDialog fileBrowser;
 extern FileDialogs::FileDialogManager otherFileBrowsers;
 extern Menus::MenuManager menuManager;
+extern ImGui::ThemeFile global_style;
 extern nlohmann::json sound_configs;
 extern std::random_device random_device;
 extern std::mt19937 random_generator;
 extern ConfiguredMusic* current_loaded_music;
+std::vector<ConfiguredMusic*> current_playing_music;
 extern int current_loaded_music_index;
 extern float global_volume;
 extern bool play_in_sequence;
 extern bool scroll_log_to_bottom;
+extern bool hook_available;
+
+std::filesystem::path current_path = std::filesystem::current_path();
+FileDialog fileBrowser("Load Sound from Files");
 
 void __TraceLogCallback(int level, const char* fmt, va_list va) {
     std::string levels[] = {
@@ -80,6 +85,7 @@ int main(int argc, char** argv) {
     for (unsigned int i=0; i<playbackDevicesCount; i++) {
         available_playback_devices.push_back(playbackDevices[i]);
     }
+    hook_available = Hooks::InitKeyboardHook();
     // set up ImGUI
     {
         rlImGuiSetup(true);
@@ -87,8 +93,9 @@ int main(int argc, char** argv) {
         ImGuiIO &io = ImGui::GetIO();
         io.FontGlobalScale = 1.2f;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
-        // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     }
+    fileBrowser.SetPersistent(); // disallow closing this one
     #pragma endregion
 
     #pragma region Config Loading
@@ -99,6 +106,7 @@ int main(int argc, char** argv) {
         {"currently_playing", ""},
         {"loaded_sounds", {}},
         {"pinned_folders", {}},
+        {"keybinds", {}},
     });
 
     if (config.load()) {
@@ -129,23 +137,67 @@ int main(int argc, char** argv) {
         for (auto s : pinned_folders) {
             AddPinnedFolder(std::filesystem::path(s));
         }
+        if (config.contains("keybinds") && config["keybinds"].is_object()) {
+            auto keybinds = config["keybinds"];
+            for (auto kb : keybinds.items()) {
+                std::string p = kb.value().get<std::string>();
+                int code = std::atoi(kb.key().c_str());
+                sound_keybinds[code] = p;
+                Hooks::BindKeycode(code);
+                if (loaded_sounds_by_path.count(p) == 0) {
+                    nlohmann::json cfg;
+                    ConfiguredMusic* cs;
+                    if (sound_configs.contains(p)) {
+                        cfg = sound_configs[p];
+                    }
+                    cs = ConfiguredMusic::Load(p, cfg);
+                    loaded_sounds.push_back(cs);
+                    loaded_sounds_by_path.insert(std::make_pair(p, loaded_sounds.size()-1));
+                }
+            }
+        }
+    }
+    if (global_style.load("theme.json")) {
+        global_style.apply();
+    } else {
+        global_style.reset();
     }
     #pragma endregion
 
     SetMasterVolume(global_volume);
 
+    // allow the sound to play while the window is being moved around
     std::thread musicUpdater = std::thread([] () {
         while (!WindowShouldClose()) {
             if (current_loaded_music) {
                 current_loaded_music->UpdateStream();
             }
+            for (auto& m : current_playing_music) {
+                if (m != nullptr) {
+                    m->UpdateStream();
+                    if (m->ShouldEnd(1.0f / 60.0f)) {
+                        m = nullptr;
+                    }
+                }
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
+            if (Hooks::MaskedVirtualKeycode vk = Hooks::GetKeycode()) {
+                ConfiguredMusic* cs = loaded_sounds[loaded_sounds_by_path[sound_keybinds[vk]]];
+                if (cs != nullptr) {
+                    cs->Start();
+                    current_playing_music.push_back(cs);
+                }
+            }
         }
     });
 
     menuManager.add(new Menus::OptionsMenu());
     menuManager.add(new Menus::SoundsMenu());
     menuManager.add(new Menus::ConsoleMenu());
+    menuManager.add(new Menus::ThemeMenu());
+    if (hook_available) {
+        menuManager.add(new Menus::HookManagerMenu());
+    }
 
     #pragma region Main Loop
     while (!WindowShouldClose()) {
@@ -201,6 +253,8 @@ int main(int argc, char** argv) {
                             has_wrapped_around = true;
                         }
                     }
+                } else {
+                    load_new_song = false;
                 }
             } else if (action == 2) {
                 // previous
@@ -294,10 +348,19 @@ int main(int argc, char** argv) {
         pinned_folders.push_back(NarrowString16To8(p.wstring()));
     }
     config.set("pinned_folders", pinned_folders);
+    nlohmann::json keybinds;
+    for (auto kb : sound_keybinds) {
+        keybinds[std::to_string(kb.first)] = kb.second;
+    }
+    config.set("keybinds", keybinds);
     config.save();
+    global_style.save("theme.json");
 
     #pragma endregion
 
+    if (hook_available) {
+        Hooks::EndKeyboardHook();
+    }
     CloseAudioDevice();
     CloseWindow();
     musicUpdater.join();

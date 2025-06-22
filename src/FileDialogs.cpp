@@ -14,6 +14,9 @@
 #include <winbase.h>
 #endif
 
+ImVec4 Color_CantBeLoaded = {255, 0, 0, 255};
+ImVec4 Color_GrayedOut = {60, 60, 60, 255};
+
 namespace FileDialogs {
 std::vector<std::filesystem::path> pinned_folders;
 
@@ -93,6 +96,10 @@ std::vector<std::filesystem::path> GetPinnedFolders() {
     return pinned_folders;
 }
 
+void FileDialog::SetPersistent(bool persistent) {
+    allow_close = !persistent;
+}
+
 bool FileDialog::Show(std::filesystem::path& selected) {
     bool clicked = false;
     if (needs_dirlist) {
@@ -103,7 +110,11 @@ bool FileDialog::Show(std::filesystem::path& selected) {
         listed_files = DirList(path, false);
     }
     bool is_open = true;
-    ImGui::Begin(title.c_str(), &is_open);
+    if (allow_close) {
+        ImGui::Begin(title.c_str(), &is_open);
+    } else {
+        ImGui::Begin(title.c_str(), nullptr);
+    }
     ImGui::SetWindowPos({802.0f, 1.0f}, ImGuiCond_FirstUseEver);
     ImGui::SetWindowSize({400.0f, 600.0f}, ImGuiCond_FirstUseEver);
 #ifdef WIN32
@@ -163,10 +174,10 @@ bool FileDialog::Show(std::filesystem::path& selected) {
         std::string str = NarrowString16To8(folderName.filename().wstring());
         ImGui::PushID(i+1);
         if (!can_be_loaded) {
-            ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
-            ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
+            ImGui::PushStyleColor(ImGuiCol_Text, Color_CantBeLoaded);
+            ImGui::PushStyleColor(ImGuiCol_Button, Color_GrayedOut);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color_GrayedOut);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color_GrayedOut);
         }
         if (ImGui::Button("+") && can_be_loaded) {
             AddPinnedFolder(folderName);
@@ -212,10 +223,10 @@ bool FileDialog::Show(std::filesystem::path& selected) {
             std::string str = NarrowString16To8(file.filename().wstring());
             ImGui::PushID(i+1+listed_folders.size());
             if (!can_be_loaded) {
-                ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
-                ImGui::PushStyleColor(ImGuiCol_Button, {60, 60, 60, 255});
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, {60, 60, 60, 255});
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {60, 60, 60, 255});
+                ImGui::PushStyleColor(ImGuiCol_Text, Color_CantBeLoaded);
+                ImGui::PushStyleColor(ImGuiCol_Button, Color_GrayedOut);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color_GrayedOut);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color_GrayedOut);
             }
             if (ImGui::Button(saveas ? "Save As" : "+") && can_be_loaded) {
                 selected = file;

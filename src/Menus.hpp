@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdexcept>
 #include <vector>
 namespace Menus {
     class Menu {
@@ -36,6 +37,15 @@ namespace Menus {
         void show() override;
     };
 
+    class ThemeMenu : public Menu {
+        public:
+        void show() override;
+    };
+
+    class HookManagerMenu : public Menu {
+        public:
+        void show() override;
+    };
 
 
 }
