@@ -1,4 +1,5 @@
 #include "Hooks.hpp"
+#include <cstring>
 #include <map>
 #include <queue>
 #include <string>
@@ -19,6 +20,7 @@ std::queue<MaskedVirtualKeycode> charactersIn;
 std::vector<MaskedVirtualKeycode> charactersBound;
 MaskedVirtualKeycode characterLastInput = {0};
 
+#ifdef _WIN32
 #pragma region Windows Virtual Keycode Strings
 const std::map<int, std::string> WindowsVirtualCharacterStrings = {
     {VK_LBUTTON, "Left mouse button"},
@@ -196,6 +198,7 @@ const std::map<int, std::string> WindowsVirtualCharacterStrings = {
     {VK_OEM_CLEAR, "Clear"},
 };
 #pragma endregion
+#endif
 
 MaskedVirtualKeycode GetKeycode() {
     if (charactersIn.size() > 0) {
@@ -326,9 +329,9 @@ std::string MaskedVirtualKeycode::tostring() {
 bool InitKeyboardHook() {
     return false;
 }
-bool EndKeyboardHook() [
+bool EndKeyboardHook() {
     return true;
-]
+}
 std::string MaskedVirtualKeycode::tostring() {
     std::string modifiers = "";
     if (shift) modifiers += "Shift+";
