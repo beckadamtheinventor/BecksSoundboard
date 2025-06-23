@@ -182,10 +182,16 @@ int main(int argc, char** argv) {
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
             if (Hooks::MaskedVirtualKeycode vk = Hooks::GetKeycode()) {
-                ConfiguredMusic* cs = loaded_sounds[loaded_sounds_by_path[sound_keybinds[vk]]];
-                if (cs != nullptr) {
-                    cs->Start();
-                    current_playing_music.push_back(cs);
+                std::string kb = sound_keybinds[vk];
+                if (loaded_sounds_by_path.count(kb) > 0) {
+                    unsigned int sound = loaded_sounds_by_path[kb];
+                    if (sound < loaded_sounds.size()) {
+                        ConfiguredMusic* cs = loaded_sounds[sound];
+                        if (cs != nullptr) {
+                            cs->Start();
+                            current_playing_music.push_back(cs);
+                        }
+                    }
                 }
             }
         }

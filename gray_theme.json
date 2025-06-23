@@ -350,7 +350,7 @@
 			3.0
 		],
 		"FrameRounding": 12.0,
-		"GrabMinSize": 0.0,
+		"GrabMinSize": 12.0,
 		"GrabRounding": 12.0,
 		"IndentSpacing": 21.0,
 		"ItemInnerSpacing": [
